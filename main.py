@@ -836,4 +836,21 @@ if __name__ == "__main__":
         if Config.STARTUP:
             add_to_startup()
     
-    bot.run(Config.TOKEN)
+    token = str(Config.TOKEN).strip().strip('"').strip("'")
+    if not token or token == "{placeholder_token}":
+        print("\n[!] ERROR: Discord bot token is not configured (currently placeholder)!")
+        print("[!] Please replace '{placeholder_token}' in Config with your real Discord Bot token, or generate using pythoin.py.\n")
+        sys.exit(1)
+
+    try:
+        bot.run(token)
+    except discord.errors.LoginFailure:
+        print("\n[!] ERROR: Discord Login Failed - Improper or Invalid Token!")
+        print("[!] Make sure you copied the BOT token (not Application ID or Client Secret) from:")
+        print("    https://discord.com/developers/applications -> [Your App] -> Bot -> Reset Token\n")
+    except discord.errors.PrivilegedIntentsRequired:
+        print("\n[!] ERROR: Privileged Gateway Intents Required!")
+        print("[!] Please enable 'Message Content Intent' in the Discord Developer Portal:")
+        print("    https://discord.com/developers/applications -> [Your App] -> Bot -> Privileged Gateway Intents\n")
+    except Exception as e:
+        print(f"\n[!] Bot encountered an error: {e}\n")
