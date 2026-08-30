@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # Disclaimer: This is only for entertainment and educational purposes.  
 # I am not responsible for what you do with it or any consequences.  
 # Made by Vexi :3
