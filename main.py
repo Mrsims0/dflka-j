@@ -759,9 +759,15 @@ async def msg_box(ctx, *, message: str):
 @is_authorized()
 async def take_screenshot(ctx, name: Optional[str] = None):
     try:
+        import mss
+        import mss.tools
+        
         filename = name if name else f"screenshot_{int(time.time())}.png"
-        screenshot = pyautogui.screenshot()
-        screenshot.save(filename)
+        
+        with mss.mss() as sct:
+            monitor = sct.monitors[0]  # All monitors
+            sct_img = sct.grab(monitor)
+            mss.tools.to_png(sct_img.rgb, sct_img.size, output=filename)
 
         with open(filename, 'rb') as f:
             picture = discord.File(f)
