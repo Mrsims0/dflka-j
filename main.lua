@@ -1219,8 +1219,8 @@ function MemeSense:CreateWindow(windowConfig)
 
     local FloatingBackdrop = Instance.new("TextButton")
     FloatingBackdrop.Name = "FloatingBackdrop"
-    FloatingBackdrop.Size = UDim2.new(1, 0, 1, 0)
-    FloatingBackdrop.Position = UDim2.new(0, 0, 0, 0)
+    FloatingBackdrop.Size = UDim2.new(10, 0, 10, 0)
+    FloatingBackdrop.Position = UDim2.new(-5, 0, -5, 0)
     FloatingBackdrop.BackgroundTransparency = 1
     FloatingBackdrop.Text = ""
     FloatingBackdrop.AutoButtonColor = false
@@ -1435,6 +1435,11 @@ function MemeSense:CreateWindow(windowConfig)
             Window.CurrentActiveFloating = nil
             Window.CurrentActiveFloatingSource = nil
         end
+        for _, child in ipairs(OverlayLayer:GetChildren()) do
+            if child ~= FloatingBackdrop then
+                pcall(function() child:Destroy() end)
+            end
+        end
     end
 
     local function SetActiveFloating(floatingObj, sourceObj, closeCallback)
@@ -1446,6 +1451,12 @@ function MemeSense:CreateWindow(windowConfig)
     end
 
     FloatingBackdrop.MouseButton1Click:Connect(function()
+        CloseActiveFloating()
+    end)
+    FloatingBackdrop.MouseButton2Click:Connect(function()
+        CloseActiveFloating()
+    end)
+    FloatingBackdrop.TouchTap:Connect(function()
         CloseActiveFloating()
     end)
 
