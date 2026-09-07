@@ -26,16 +26,19 @@ local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
 
--- Safe parent function
-local function GetSafeGuiParent()
+-- Safe parent function (prioritizing CoreGui)
+local function GetSafeGuiParent(customParent)
+    if customParent then
+        return customParent
+    end
     local success, result = pcall(function()
-        if typeof(gethui) == "function" then
-            return gethui()
-        end
         return CoreGui
     end)
     if success and result then
         return result
+    end
+    if typeof(gethui) == "function" then
+        return gethui()
     end
     if LocalPlayer then
         return LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui", 5)
@@ -134,7 +137,7 @@ function MemeSense:CreateWindow(windowConfig)
     local Theme = MemeSense.Themes.Default
 
     -- ScreenGui
-    local GuiParent = GetSafeGuiParent()
+    local GuiParent = GetSafeGuiParent(windowConfig.Parent)
     local ScreenGui = Instance.new("ScreenGui")
     ScreenGui.Name = "MemeSense_" .. tostring(math.random(10000, 99999))
     ScreenGui.ResetOnSpawn = false
