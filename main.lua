@@ -10,6 +10,12 @@ local function GetSafeGuiParent(customParent)
     if customParent and typeof(customParent) == "Instance" and customParent.Parent then
         return customParent
     end
+    if LocalPlayer then
+        local pGui = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:FindFirstChild("PlayerGui")
+        if pGui then return pGui end
+        local ok, res = pcall(function() return LocalPlayer:WaitForChild("PlayerGui", 3) end)
+        if ok and res then return res end
+    end
     if typeof(gethui) == "function" then
         local success, hui = pcall(gethui)
         if success and hui and typeof(hui) == "Instance" then
@@ -25,12 +31,6 @@ local function GetSafeGuiParent(customParent)
     end)
     if coreOk and coreResult then
         return coreResult
-    end
-    if LocalPlayer then
-        local pGui = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:FindFirstChild("PlayerGui")
-        if pGui then return pGui end
-        local ok, res = pcall(function() return LocalPlayer:WaitForChild("PlayerGui", 3) end)
-        if ok and res then return res end
     end
     return game:GetService("StarterGui")
 end
