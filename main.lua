@@ -10,12 +10,6 @@ local function GetSafeGuiParent(customParent)
     if customParent and typeof(customParent) == "Instance" and customParent.Parent then
         return customParent
     end
-    if LocalPlayer then
-        local pGui = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:FindFirstChild("PlayerGui")
-        if pGui then return pGui end
-        local ok, res = pcall(function() return LocalPlayer:WaitForChild("PlayerGui", 3) end)
-        if ok and res then return res end
-    end
     if typeof(gethui) == "function" then
         local success, hui = pcall(gethui)
         if success and hui and typeof(hui) == "Instance" then
@@ -31,6 +25,12 @@ local function GetSafeGuiParent(customParent)
     end)
     if coreOk and coreResult then
         return coreResult
+    end
+    if LocalPlayer then
+        local pGui = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:FindFirstChild("PlayerGui")
+        if pGui then return pGui end
+        local ok, res = pcall(function() return LocalPlayer:WaitForChild("PlayerGui", 3) end)
+        if ok and res then return res end
     end
     return game:GetService("StarterGui")
 end
@@ -695,8 +695,22 @@ local function CreateColumnController(columnsContainer, colTitle, columnsList, T
         end
         UpdateDisplay()
 
+        local IsDropdownOpen = false
+
+        local function CloseDropdown()
+            if not IsDropdownOpen then return end
+            IsDropdownOpen = false
+            Tween(Chevron, {Rotation = 0}, 0.15)
+            Tween(DStroke, {Color = Theme.ItemBorder}, 0.15)
+            Window:CloseActiveFloating()
+        end
+
         local function OpenDropdownMenu()
             Window:CloseActiveFloating()
+            IsDropdownOpen = true
+            Tween(Chevron, {Rotation = 180}, 0.15)
+            Tween(DStroke, {Color = Theme.Accent}, 0.15)
+
             local pos = DropButton.AbsolutePosition - Window.MainFrame.AbsolutePosition
             local size = DropButton.AbsoluteSize
 
@@ -778,17 +792,21 @@ local function CreateColumnController(columnsContainer, colTitle, columnsList, T
                         Selected = opt
                         UpdateDisplay()
                         Callback(Selected)
-                        Window:CloseActiveFloating()
+                        CloseDropdown()
                     end
                 end)
             end
 
-            Window:SetActiveFloating(FloatingFrame, DropButton)
+            Window:SetActiveFloating(FloatingFrame, DropButton, function()
+                IsDropdownOpen = false
+                Tween(Chevron, {Rotation = 0}, 0.15)
+                Tween(DStroke, {Color = Theme.ItemBorder}, 0.15)
+            end)
         end
 
         DropButton.MouseButton1Click:Connect(function()
-            if Window.CurrentActiveFloating and Window.CurrentActiveFloating.Name == ("DropdownFloating_" .. Name) then
-                Window:CloseActiveFloating()
+            if IsDropdownOpen then
+                CloseDropdown()
             else
                 OpenDropdownMenu()
             end
@@ -805,8 +823,8 @@ local function CreateColumnController(columnsContainer, colTitle, columnsList, T
             SetVisible = function(self, isVis)
                 if type(self) == "boolean" then isVis = self end
                 DropRow.Visible = isVis
-                if not isVis and Window.CurrentActiveFloating and Window.CurrentActiveFloating.Name == ("DropdownFloating_" .. Name) then
-                    Window:CloseActiveFloating()
+                if not isVis and IsDropdownOpen then
+                    CloseDropdown()
                 end
             end,
             Visible = function(self, isVis)
@@ -815,8 +833,8 @@ local function CreateColumnController(columnsContainer, colTitle, columnsList, T
                 end
                 if isVis ~= nil then
                     DropRow.Visible = isVis
-                    if not isVis and Window.CurrentActiveFloating and Window.CurrentActiveFloating.Name == ("DropdownFloating_" .. Name) then
-                        Window:CloseActiveFloating()
+                    if not isVis and IsDropdownOpen then
+                        CloseDropdown()
                     end
                 else
                     return DropRow.Visible
@@ -1199,6 +1217,17 @@ function MemeSense:CreateWindow(windowConfig)
     OverlayLayer.ZIndex = 800
     OverlayLayer.Parent = MainFrame
 
+    local FloatingBackdrop = Instance.new("TextButton")
+    FloatingBackdrop.Name = "FloatingBackdrop"
+    FloatingBackdrop.Size = UDim2.new(1, 0, 1, 0)
+    FloatingBackdrop.Position = UDim2.new(0, 0, 0, 0)
+    FloatingBackdrop.BackgroundTransparency = 1
+    FloatingBackdrop.Text = ""
+    FloatingBackdrop.AutoButtonColor = false
+    FloatingBackdrop.Visible = false
+    FloatingBackdrop.ZIndex = 840
+    FloatingBackdrop.Parent = OverlayLayer
+
     local WeaponSelectorConfig = windowConfig.WeaponSelector or {
         Options = {"All weapons", "Pistols", "Rifles", "Snipers", "SMGs", "Shotguns"},
         Default = "All weapons"
@@ -1248,7 +1277,7 @@ function MemeSense:CreateWindow(windowConfig)
     local SaveButton = Instance.new("TextButton")
     SaveButton.Name = "SaveButton"
     SaveButton.Size = UDim2.new(0, 70, 0, 24)
-    SaveButton.Position = UDim2.new(1, -78, 0.5, -12)
+    SaveButton.Position = UDim2.new(1, -108, 0.5, -12)
     SaveButton.BackgroundColor3 = Theme.ItemFill
     SaveButton.BorderSizePixel = 0
     SaveButton.Text = ""
@@ -1302,6 +1331,34 @@ function MemeSense:CreateWindow(windowConfig)
             windowConfig.SaveCallback()
         end
     end)
+
+    local CloseButton = Instance.new("TextButton")
+    CloseButton.Name = "CloseButton"
+    CloseButton.Size = UDim2.new(0, 24, 0, 24)
+    CloseButton.Position = UDim2.new(1, -30, 0.5, -12)
+    CloseButton.BackgroundColor3 = Theme.ItemFill
+    CloseButton.BorderSizePixel = 0
+    CloseButton.Text = ""
+    CloseButton.AutoButtonColor = false
+    CloseButton.Parent = HeaderControls
+
+    local CloseCorner = Instance.new("UICorner")
+    CloseCorner.CornerRadius = UDim.new(0, 4)
+    CloseCorner.Parent = CloseButton
+
+    local CloseStroke = Instance.new("UIStroke")
+    CloseStroke.Color = Theme.ItemBorder
+    CloseStroke.Thickness = 1
+    CloseStroke.Parent = CloseButton
+
+    local CloseIcon = Instance.new("ImageLabel")
+    CloseIcon.Name = "Icon"
+    CloseIcon.Size = UDim2.new(0, 11, 0, 11)
+    CloseIcon.Position = UDim2.new(0.5, -5, 0.5, -5)
+    CloseIcon.BackgroundTransparency = 1
+    CloseIcon.Image = MemeSense.Icons.close
+    CloseIcon.ImageColor3 = Theme.TextSecondary
+    CloseIcon.Parent = CloseButton
 
     local Body = Instance.new("Frame")
     Body.Name = "Body"
@@ -1362,10 +1419,17 @@ function MemeSense:CreateWindow(windowConfig)
         Theme = Theme,
         OverlayLayer = OverlayLayer,
         CurrentActiveFloating = nil,
-        CurrentActiveFloatingSource = nil
+        CurrentActiveFloatingSource = nil,
+        CurrentActiveFloatingCallback = nil
     }
 
     local function CloseActiveFloating()
+        FloatingBackdrop.Visible = false
+        if Window.CurrentActiveFloatingCallback then
+            local cb = Window.CurrentActiveFloatingCallback
+            Window.CurrentActiveFloatingCallback = nil
+            pcall(cb)
+        end
         if Window.CurrentActiveFloating then
             pcall(function() Window.CurrentActiveFloating:Destroy() end)
             Window.CurrentActiveFloating = nil
@@ -1373,17 +1437,36 @@ function MemeSense:CreateWindow(windowConfig)
         end
     end
 
-    local function SetActiveFloating(floatingObj, sourceObj)
+    local function SetActiveFloating(floatingObj, sourceObj, closeCallback)
         CloseActiveFloating()
+        FloatingBackdrop.Visible = true
         Window.CurrentActiveFloating = floatingObj
         Window.CurrentActiveFloatingSource = sourceObj
+        Window.CurrentActiveFloatingCallback = closeCallback
     end
+
+    FloatingBackdrop.MouseButton1Click:Connect(function()
+        CloseActiveFloating()
+    end)
 
     Window.CloseActiveFloating = CloseActiveFloating
     Window.SetActiveFloating = SetActiveFloating
 
+    local IsHeaderDropOpen = false
+    local function CloseHeaderDropdown()
+        if not IsHeaderDropOpen then return end
+        IsHeaderDropOpen = false
+        Tween(WArrow, {Rotation = 0}, 0.15)
+        Tween(WStroke, {Color = Theme.ItemBorder}, 0.15)
+        Window:CloseActiveFloating()
+    end
+
     local function OpenHeaderDropdown(options, currentVal, callback)
         CloseActiveFloating()
+        IsHeaderDropOpen = true
+        Tween(WArrow, {Rotation = 180}, 0.15)
+        Tween(WStroke, {Color = Theme.Accent}, 0.15)
+
         local pos = WeaponDropdownButton.AbsolutePosition - MainFrame.AbsolutePosition
         local size = WeaponDropdownButton.AbsoluteSize
 
@@ -1455,65 +1538,34 @@ function MemeSense:CreateWindow(windowConfig)
                 currentVal = opt
                 WLabel.Text = tostring(opt)
                 if callback then callback(opt) end
-                CloseActiveFloating()
+                CloseHeaderDropdown()
             end)
         end
 
-        SetActiveFloating(DropFrame, WeaponDropdownButton)
+        SetActiveFloating(DropFrame, WeaponDropdownButton, function()
+            IsHeaderDropOpen = false
+            Tween(WArrow, {Rotation = 0}, 0.15)
+            Tween(WStroke, {Color = Theme.ItemBorder}, 0.15)
+        end)
     end
 
     WeaponDropdownButton.MouseButton1Click:Connect(function()
-        if Window.CurrentActiveFloating and Window.CurrentActiveFloating.Name == "WeaponDropFloating" then
-            CloseActiveFloating()
+        if IsHeaderDropOpen then
+            CloseHeaderDropdown()
         else
             OpenHeaderDropdown(WeaponSelectorConfig.Options, WLabel.Text, WeaponSelectorConfig.Callback)
         end
     end)
 
-    UserInputService.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            if Window.CurrentActiveFloating then
-                task.defer(function()
-                    if not Window.CurrentActiveFloating or not Window.CurrentActiveFloating.Parent then
-                        Window.CurrentActiveFloating = nil
-                        Window.CurrentActiveFloatingSource = nil
-                        return
-                    end
-
-                    local mousePos = UserInputService:GetMouseLocation()
-                    if not mousePos then return end
-
-                    local fPos, fSize
-                    local sOk = pcall(function()
-                        fPos = Window.CurrentActiveFloating.AbsolutePosition
-                        fSize = Window.CurrentActiveFloating.AbsoluteSize
-                    end)
-
-                    if not sOk or not fPos or not fSize then
-                        CloseActiveFloating()
-                        return
-                    end
-
-                    local insideFloating = mousePos.X >= fPos.X and mousePos.X <= fPos.X + fSize.X and mousePos.Y >= fPos.Y and mousePos.Y <= fPos.Y + fSize.Y
-
-                    local insideSource = false
-                    if Window.CurrentActiveFloatingSource and Window.CurrentActiveFloatingSource.Parent then
-                        local sPos, sSize
-                        local srcOk = pcall(function()
-                            sPos = Window.CurrentActiveFloatingSource.AbsolutePosition
-                            sSize = Window.CurrentActiveFloatingSource.AbsoluteSize
-                        end)
-                        if srcOk and sPos and sSize then
-                            insideSource = mousePos.X >= sPos.X and mousePos.X <= sPos.X + sSize.X and mousePos.Y >= sPos.Y and mousePos.Y <= sPos.Y + sSize.Y
-                        end
-                    end
-
-                    if not insideFloating and not insideSource then
-                        CloseActiveFloating()
-                    end
-                end)
-            end
-        end
+    CloseButton.MouseEnter:Connect(function()
+        Tween(CloseButton, {BackgroundColor3 = Color3.fromRGB(42, 22, 28)}, 0.1)
+        Tween(CloseStroke, {Color = Theme.Accent}, 0.1)
+        Tween(CloseIcon, {ImageColor3 = Color3.fromRGB(255, 70, 90)}, 0.1)
+    end)
+    CloseButton.MouseLeave:Connect(function()
+        Tween(CloseButton, {BackgroundColor3 = Theme.ItemFill}, 0.1)
+        Tween(CloseStroke, {Color = Theme.ItemBorder}, 0.1)
+        Tween(CloseIcon, {ImageColor3 = Theme.TextSecondary}, 0.1)
     end)
 
     local Dragging = false
@@ -1561,6 +1613,7 @@ function MemeSense:CreateWindow(windowConfig)
                 ScreenGui.Parent = GetSafeGuiParent(windowConfig.Parent)
             end)
         end
+        ScreenGui.Enabled = true
         MainFrame.Visible = WindowOpen
         if not WindowOpen then
             CloseActiveFloating()
@@ -1571,9 +1624,28 @@ function MemeSense:CreateWindow(windowConfig)
         SetWindowVisible(not WindowOpen)
     end
 
+    CloseButton.MouseButton1Click:Connect(function()
+        SetWindowVisible(false)
+        Window:Notify({
+            Title = "MemeSense Minimized",
+            Content = "Press " .. tostring(ToggleKey.Name or "RightShift") .. " or INSERT to reopen menu.",
+            Duration = 3
+        })
+    end)
+
     UserInputService.InputBegan:Connect(function(input, processed)
-        if input.KeyCode ~= Enum.KeyCode.Unknown and input.KeyCode == ToggleKey then
-            ToggleWindow()
+        if input.KeyCode ~= Enum.KeyCode.Unknown then
+            if input.KeyCode == ToggleKey or input.KeyCode == Enum.KeyCode.RightShift or input.KeyCode == Enum.KeyCode.Insert then
+                ToggleWindow()
+            end
+        end
+    end)
+
+    ScreenGui.AncestryChanged:Connect(function(_, parent)
+        if not parent and ScreenGui and not Unloaded then
+            pcall(function()
+                ScreenGui.Parent = GetSafeGuiParent(windowConfig.Parent)
+            end)
         end
     end)
 
@@ -1581,6 +1653,9 @@ function MemeSense:CreateWindow(windowConfig)
     Window.Toggle = ToggleWindow
     Window.IsOpen = function() return WindowOpen end
     Window.SetToggleKey = function(self, newKey)
+        if typeof(self) == "EnumItem" then
+            newKey = self
+        end
         ToggleKey = newKey
     end
 
