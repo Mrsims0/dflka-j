@@ -1,24 +1,3 @@
---[[
-    MemeSense UI Library for Luau / Roblox
-    Pixel-perfect 1:1 recreation of the MemeSense Menu
-    
-    Features:
-    - Exact color palette, fonts, spacing, and micro-interactions
-    - Top rainbow/neon accent gradient strip
-    - Top bar: Branded logo ("Meme" in crimson red, "Sense" in white), Master Switch, Profile Selector, Save Button
-    - Tab Sidebar with active red indicator, custom icons, and hover feedback
-    - Sub-Tabs support within any Tab (pill navigation with independent column containers)
-    - Multi-column layout with centered sub-headers
-    - Controls:
-        * Toggles with inline Keybind & inline ColorPicker attachments
-        * Precision Sliders with min, max, decimals, suffix formatting
-        * Dropdowns with Single-select and Multi-select support, floating popouts
-        * Dual selectors / inline switches
-        * Buttons, Inputs, ColorPickers, Keybinds
-        * Floating Watermark and MemeSense Toast Notifications
-    - Smooth dragging, toggle key (Insert / RightShift), CoreGui / PlayerGui support
---]]
-
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
@@ -73,6 +52,11 @@ local MemeSense = {
         }
     },
     Icons = {
+        ["combat"]       = "rbxassetid://10709791437",
+        ["aimbot"]       = "rbxassetid://10723346959",
+        ["rage"]         = "rbxassetid://10734975692",
+        ["weapon mods"]  = "rbxassetid://10709810948",
+        ["weapon"]       = "rbxassetid://10709810948",
         ["legitbot"]     = "rbxassetid://10723346959",
         ["aimassist"]    = "rbxassetid://10709791437",
         ["players"]      = "rbxassetid://10747373176",
@@ -1540,11 +1524,23 @@ function MemeSense:CreateWindow(windowConfig)
     end)
 
     local WindowOpen = true
-    UserInputService.InputBegan:Connect(function(input, processed)
-        if not processed and input.KeyCode == ToggleKey then
-            WindowOpen = not WindowOpen
-            MainFrame.Visible = WindowOpen
+    local function SetWindowVisible(visible)
+        WindowOpen = visible
+        MainFrame.Visible = WindowOpen
+        if not WindowOpen then
             CloseActiveFloating()
+        end
+    end
+
+    local function ToggleWindow()
+        SetWindowVisible(not WindowOpen)
+    end
+
+    UserInputService.InputBegan:Connect(function(input, processed)
+        if input.KeyCode ~= Enum.KeyCode.Unknown and input.KeyCode == ToggleKey then
+            if not UserInputService:GetFocusedTextBox() then
+                ToggleWindow()
+            end
         end
     end)
 
@@ -1557,7 +1553,13 @@ function MemeSense:CreateWindow(windowConfig)
         OverlayLayer = OverlayLayer,
         CloseActiveFloating = CloseActiveFloating,
         SetActiveFloating = SetActiveFloating,
-        CurrentActiveFloating = CurrentActiveFloating
+        CurrentActiveFloating = CurrentActiveFloating,
+        SetVisible = SetWindowVisible,
+        Toggle = ToggleWindow,
+        IsOpen = function() return WindowOpen end,
+        SetToggleKey = function(self, newKey)
+            ToggleKey = newKey
+        end
     }
 
     function Window:CreateTab(tabConfig)
