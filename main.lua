@@ -792,12 +792,33 @@ local function CreateColumnController(columnsContainer, colTitle, columnsList, T
         end)
 
         local DropObject = {
+            Row = DropRow,
             Set = function(val)
                 Selected = val
                 UpdateDisplay()
                 Callback(Selected)
             end,
-            Get = function() return Selected end
+            Get = function() return Selected end,
+            SetVisible = function(self, isVis)
+                if type(self) == "boolean" then isVis = self end
+                DropRow.Visible = isVis
+                if not isVis and Window.CurrentActiveFloating and Window.CurrentActiveFloating.Name == ("DropdownFloating_" .. Name) then
+                    Window:CloseActiveFloating()
+                end
+            end,
+            Visible = function(self, isVis)
+                if isVis == nil and type(self) == "boolean" then
+                    isVis = self
+                end
+                if isVis ~= nil then
+                    DropRow.Visible = isVis
+                    if not isVis and Window.CurrentActiveFloating and Window.CurrentActiveFloating.Name == ("DropdownFloating_" .. Name) then
+                        Window:CloseActiveFloating()
+                    end
+                else
+                    return DropRow.Visible
+                end
+            end
         }
 
         table.insert(Column.Elements, DropRow)
