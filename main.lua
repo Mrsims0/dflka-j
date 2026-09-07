@@ -1008,7 +1008,7 @@ function MemeSense:CreateWindow(windowConfig)
     local Title = windowConfig.Title or "Meme"
     local SubTitle = windowConfig.SubTitle or "Sense"
     local Size = windowConfig.Size or UDim2.fromOffset(730, 490)
-    local ToggleKey = windowConfig.ToggleKey or Enum.KeyCode.Insert
+    local ToggleKey = windowConfig.ToggleKey or Enum.KeyCode.RightShift
     local Theme = MemeSense.Themes.Default
 
     local GuiParent = GetSafeGuiParent(windowConfig.Parent)
