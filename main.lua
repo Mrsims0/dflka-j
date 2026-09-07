@@ -53,6 +53,7 @@ local MemeSense = {
     },
     Icons = {
         ["combat"]       = "rbxassetid://10709791437",
+        ["legit"]        = "rbxassetid://10723346959",
         ["aimbot"]       = "rbxassetid://10723346959",
         ["rage"]         = "rbxassetid://10734975692",
         ["weapon mods"]  = "rbxassetid://10709810948",
@@ -337,12 +338,18 @@ local function CreateColumnController(columnsContainer, colTitle, columnsList, T
             BText.Parent = BindButton
 
             local function FormatKey(k)
-                if k == Enum.KeyCode.Unknown then return "..." end
-                return string.upper(k.Name)
+                if k == Enum.KeyCode.Unknown or not k then return "..." end
+                if typeof(k) == "EnumItem" then
+                    if k == Enum.UserInputType.MouseButton1 then return "M1" end
+                    if k == Enum.UserInputType.MouseButton2 then return "M2" end
+                    if k == Enum.UserInputType.MouseButton3 then return "M3" end
+                    return string.upper(k.Name)
+                end
+                return tostring(k)
             end
 
             local function UpdateBindDisplay()
-                if BindKey == Enum.KeyCode.Unknown then
+                if BindKey == Enum.KeyCode.Unknown or not BindKey then
                     BIcon.Visible = true
                     BText.Visible = false
                     BindButton.Size = UDim2.new(0, 20, 0, 16)
@@ -378,11 +385,13 @@ local function CreateColumnController(columnsContainer, colTitle, columnsList, T
                         BText.TextColor3 = Theme.TextSecondary
                         UpdateBindDisplay()
                         BindCallback(BindKey)
-                    elseif input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 then
+                    elseif input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 or input.UserInputType == Enum.UserInputType.MouseButton3 then
                         conn:Disconnect()
                         Listening = false
+                        BindKey = input.UserInputType
                         BText.TextColor3 = Theme.TextSecondary
                         UpdateBindDisplay()
+                        BindCallback(BindKey)
                     end
                 end)
             end)
