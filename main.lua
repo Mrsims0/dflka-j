@@ -1439,18 +1439,38 @@ function MemeSense:CreateWindow(windowConfig)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             if CurrentActiveFloating then
                 task.defer(function()
-                    if not CurrentActiveFloating then return end
-                    local mousePos = UserInputService:GetMouseLocation()
+                    if not CurrentActiveFloating or not CurrentActiveFloating.Parent then
+                        CurrentActiveFloating = nil
+                        CurrentActiveFloatingSource = nil
+                        return
+                    end
 
-                    local fPos = CurrentActiveFloating.AbsolutePosition
-                    local fSize = CurrentActiveFloating.AbsoluteSize
+                    local mousePos = UserInputService:GetMouseLocation()
+                    if not mousePos then return end
+
+                    local fPos, fSize
+                    local sOk = pcall(function()
+                        fPos = CurrentActiveFloating.AbsolutePosition
+                        fSize = CurrentActiveFloating.AbsoluteSize
+                    end)
+
+                    if not sOk or not fPos or not fSize then
+                        CloseActiveFloating()
+                        return
+                    end
+
                     local insideFloating = mousePos.X >= fPos.X and mousePos.X <= fPos.X + fSize.X and mousePos.Y >= fPos.Y and mousePos.Y <= fPos.Y + fSize.Y
 
                     local insideSource = false
-                    if CurrentActiveFloatingSource then
-                        local sPos = CurrentActiveFloatingSource.AbsolutePosition
-                        local sSize = CurrentActiveFloatingSource.AbsoluteSize
-                        insideSource = mousePos.X >= sPos.X and mousePos.X <= sPos.X + sSize.X and mousePos.Y >= sPos.Y and mousePos.Y <= sPos.Y + sSize.Y
+                    if CurrentActiveFloatingSource and CurrentActiveFloatingSource.Parent then
+                        local sPos, sSize
+                        local srcOk = pcall(function()
+                            sPos = CurrentActiveFloatingSource.AbsolutePosition
+                            sSize = CurrentActiveFloatingSource.AbsoluteSize
+                        end)
+                        if srcOk and sPos and sSize then
+                            insideSource = mousePos.X >= sPos.X and mousePos.X <= sPos.X + sSize.X and mousePos.Y >= sPos.Y and mousePos.Y <= sPos.Y + sSize.Y
+                        end
                     end
 
                     if not insideFloating and not insideSource then
