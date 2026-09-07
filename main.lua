@@ -696,32 +696,61 @@ local function CreateColumnController(columnsContainer, colTitle, columnsList, T
         UpdateDisplay()
 
         local IsDropdownOpen = false
+        local FloatingFrame = nil
+        local inputConn = nil
 
         local function CloseDropdown()
             if not IsDropdownOpen then return end
             IsDropdownOpen = false
             Tween(Chevron, {Rotation = 0}, 0.15)
             Tween(DStroke, {Color = Theme.ItemBorder}, 0.15)
-            Window:CloseActiveFloating()
+            if inputConn then
+                inputConn:Disconnect()
+                inputConn = nil
+            end
+            if FloatingFrame and FloatingFrame.Parent then
+                FloatingFrame:Destroy()
+                FloatingFrame = nil
+            end
+            if Window and Window.ActiveDropdownCloser == CloseDropdown then
+                Window.ActiveDropdownCloser = nil
+            end
         end
 
         local function OpenDropdownMenu()
-            Window:CloseActiveFloating()
+            if Window and Window.CloseActiveDropdown then
+                Window:CloseActiveDropdown()
+            end
+
             IsDropdownOpen = true
+            if Window then
+                Window.ActiveDropdownCloser = CloseDropdown
+            end
             Tween(Chevron, {Rotation = 180}, 0.15)
             Tween(DStroke, {Color = Theme.Accent}, 0.15)
 
-            local pos = DropButton.AbsolutePosition - Window.MainFrame.AbsolutePosition
-            local size = DropButton.AbsoluteSize
+            local dropWidth = math.max(DropButton.AbsoluteSize.X, 115)
+            local dropHeight = math.min(#Options * 22 + 6, 150)
+            local posX = DropButton.AbsolutePosition.X
+            local posY = DropButton.AbsolutePosition.Y + DropButton.AbsoluteSize.Y + 3
 
-            local FloatingFrame = Instance.new("Frame")
+            local targetGui = (Window and Window.ScreenGui) or ScreenGui or OverlayLayer
+            local scrSize = (targetGui and targetGui.AbsoluteSize) or (Workspace.CurrentCamera and Workspace.CurrentCamera.ViewportSize) or Vector2.new(1920, 1080)
+            if posX + dropWidth > scrSize.X - 8 then
+                posX = posX + DropButton.AbsoluteSize.X - dropWidth
+            end
+            if posY + dropHeight > scrSize.Y - 8 then
+                posY = DropButton.AbsolutePosition.Y - dropHeight - 3
+            end
+
+            FloatingFrame = Instance.new("Frame")
             FloatingFrame.Name = "DropdownFloating_" .. Name
-            FloatingFrame.Size = UDim2.new(0, math.max(size.X, 115), 0, math.min(#Options * 22 + 6, 150))
-            FloatingFrame.Position = UDim2.new(0, pos.X, 0, pos.Y + size.Y + 3)
+            FloatingFrame.Size = UDim2.new(0, dropWidth, 0, dropHeight)
+            FloatingFrame.Position = UDim2.new(0, posX, 0, posY)
             FloatingFrame.BackgroundColor3 = Theme.CardBackground
             FloatingFrame.BorderSizePixel = 0
-            FloatingFrame.ZIndex = 850
-            FloatingFrame.Parent = OverlayLayer
+            FloatingFrame.ZIndex = 9999
+            FloatingFrame.Parent = targetGui
 
             local FCorner = Instance.new("UICorner")
             FCorner.CornerRadius = UDim.new(0, 3)
@@ -741,7 +770,7 @@ local function CreateColumnController(columnsContainer, colTitle, columnsList, T
             FScroll.ScrollBarImageColor3 = Theme.ItemBorderHover
             FScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
             FScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-            FScroll.ZIndex = 851
+            FScroll.ZIndex = 10000
             FScroll.Parent = FloatingFrame
 
             local FLayout = Instance.new("UIListLayout")
@@ -750,34 +779,45 @@ local function CreateColumnController(columnsContainer, colTitle, columnsList, T
             FLayout.Parent = FScroll
 
             for _, opt in ipairs(Options) do
+                local isSelected = Multi and (Selected[opt] == true) or (Selected == opt)
+
                 local OptButton = Instance.new("TextButton")
+                OptButton.Name = "Option_" .. tostring(opt)
                 OptButton.Size = UDim2.new(1, 0, 0, 20)
-                OptButton.BackgroundTransparency = 1
+                OptButton.BackgroundColor3 = isSelected and Theme.ItemFill or Theme.CardBackground
+                OptButton.BackgroundTransparency = isSelected and 0 or 1
+                OptButton.BorderSizePixel = 0
                 OptButton.Text = ""
                 OptButton.AutoButtonColor = false
-                OptButton.ZIndex = 852
+                OptButton.ZIndex = 10001
                 OptButton.Parent = FScroll
 
                 local OptLabel = Instance.new("TextLabel")
+                OptLabel.Name = "Label"
                 OptLabel.Size = UDim2.new(1, -12, 1, 0)
                 OptLabel.Position = UDim2.new(0, 6, 0, 0)
                 OptLabel.BackgroundTransparency = 1
                 OptLabel.Text = tostring(opt)
                 OptLabel.Font = Enum.Font.GothamMedium
                 OptLabel.TextSize = 11
-                local isSelected = Multi and Selected[opt] or (Selected == opt)
                 OptLabel.TextColor3 = isSelected and Theme.Accent or Theme.TextSecondary
                 OptLabel.TextXAlignment = Enum.TextXAlignment.Left
-                OptLabel.ZIndex = 853
+                OptLabel.ZIndex = 10002
                 OptLabel.Parent = OptButton
 
                 OptButton.MouseEnter:Connect(function()
+                    OptButton.BackgroundTransparency = 0
+                    OptButton.BackgroundColor3 = Theme.ItemFill
                     Tween(OptLabel, {TextColor3 = Theme.TextPrimary}, 0.1)
                 end)
                 OptButton.MouseLeave:Connect(function()
-                    local stillSelected = Multi and Selected[opt] or (Selected == opt)
+                    local stillSelected = Multi and (Selected[opt] == true) or (Selected == opt)
+                    OptButton.BackgroundTransparency = stillSelected and 0 or 1
+                    OptButton.BackgroundColor3 = Theme.ItemFill
                     if not stillSelected then
                         Tween(OptLabel, {TextColor3 = Theme.TextSecondary}, 0.1)
+                    else
+                        Tween(OptLabel, {TextColor3 = Theme.Accent}, 0.1)
                     end
                 end)
 
@@ -785,6 +825,7 @@ local function CreateColumnController(columnsContainer, colTitle, columnsList, T
                     if Multi then
                         Selected[opt] = not Selected[opt]
                         isSelected = Selected[opt]
+                        OptButton.BackgroundTransparency = isSelected and 0 or 1
                         OptLabel.TextColor3 = isSelected and Theme.Accent or Theme.TextSecondary
                         UpdateDisplay()
                         Callback(Selected)
@@ -797,10 +838,28 @@ local function CreateColumnController(columnsContainer, colTitle, columnsList, T
                 end)
             end
 
-            Window:SetActiveFloating(FloatingFrame, DropButton, function()
-                IsDropdownOpen = false
-                Tween(Chevron, {Rotation = 0}, 0.15)
-                Tween(DStroke, {Color = Theme.ItemBorder}, 0.15)
+            task.defer(function()
+                if not IsDropdownOpen then return end
+                inputConn = UserInputService.InputBegan:Connect(function(input)
+                    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 or input.UserInputType == Enum.UserInputType.Touch then
+                        if not IsDropdownOpen or not FloatingFrame or not FloatingFrame.Parent then
+                            if inputConn then inputConn:Disconnect(); inputConn = nil end
+                            return
+                        end
+                        local mPos = input.Position
+                        local fPos = FloatingFrame.AbsolutePosition
+                        local fSize = FloatingFrame.AbsoluteSize
+                        local bPos = DropButton.AbsolutePosition
+                        local bSize = DropButton.AbsoluteSize
+
+                        local inFloating = (mPos.X >= fPos.X and mPos.X <= fPos.X + fSize.X and mPos.Y >= fPos.Y and mPos.Y <= fPos.Y + fSize.Y)
+                        local inButton = (mPos.X >= bPos.X and mPos.X <= bPos.X + bSize.X and mPos.Y >= bPos.Y and mPos.Y <= bPos.Y + bSize.Y)
+
+                        if not inFloating and not inButton then
+                            CloseDropdown()
+                        end
+                    end
+                end)
             end)
         end
 
@@ -1217,17 +1276,6 @@ function MemeSense:CreateWindow(windowConfig)
     OverlayLayer.ZIndex = 800
     OverlayLayer.Parent = MainFrame
 
-    local FloatingBackdrop = Instance.new("TextButton")
-    FloatingBackdrop.Name = "FloatingBackdrop"
-    FloatingBackdrop.Size = UDim2.new(10, 0, 10, 0)
-    FloatingBackdrop.Position = UDim2.new(-5, 0, -5, 0)
-    FloatingBackdrop.BackgroundTransparency = 1
-    FloatingBackdrop.Text = ""
-    FloatingBackdrop.AutoButtonColor = false
-    FloatingBackdrop.Visible = false
-    FloatingBackdrop.ZIndex = 840
-    FloatingBackdrop.Parent = OverlayLayer
-
     local WeaponSelectorConfig = windowConfig.WeaponSelector or {
         Options = {"All weapons", "Pistols", "Rifles", "Snipers", "SMGs", "Shotguns"},
         Default = "All weapons"
@@ -1418,13 +1466,18 @@ function MemeSense:CreateWindow(windowConfig)
         ActiveTab = nil,
         Theme = Theme,
         OverlayLayer = OverlayLayer,
+        ActiveDropdownCloser = nil,
         CurrentActiveFloating = nil,
         CurrentActiveFloatingSource = nil,
         CurrentActiveFloatingCallback = nil
     }
 
     local function CloseActiveFloating()
-        FloatingBackdrop.Visible = false
+        if Window.ActiveDropdownCloser then
+            local closer = Window.ActiveDropdownCloser
+            Window.ActiveDropdownCloser = nil
+            pcall(closer)
+        end
         if Window.CurrentActiveFloatingCallback then
             local cb = Window.CurrentActiveFloatingCallback
             Window.CurrentActiveFloatingCallback = nil
@@ -1435,69 +1488,70 @@ function MemeSense:CreateWindow(windowConfig)
             Window.CurrentActiveFloating = nil
             Window.CurrentActiveFloatingSource = nil
         end
-        for _, child in ipairs(OverlayLayer:GetChildren()) do
-            if child ~= FloatingBackdrop then
-                pcall(function() child:Destroy() end)
-            end
-        end
     end
 
     local function SetActiveFloating(floatingObj, sourceObj, closeCallback)
         CloseActiveFloating()
-        FloatingBackdrop.Visible = true
         Window.CurrentActiveFloating = floatingObj
         Window.CurrentActiveFloatingSource = sourceObj
         Window.CurrentActiveFloatingCallback = closeCallback
     end
 
-    FloatingBackdrop.MouseButton1Click:Connect(function()
-        CloseActiveFloating()
-    end)
-    FloatingBackdrop.MouseButton2Click:Connect(function()
-        CloseActiveFloating()
-    end)
-    FloatingBackdrop.TouchTap:Connect(function()
-        CloseActiveFloating()
-    end)
-
     Window.CloseActiveFloating = CloseActiveFloating
+    Window.CloseActiveDropdown = CloseActiveFloating
     Window.SetActiveFloating = SetActiveFloating
 
     local IsHeaderDropOpen = false
+    local HeaderDropFrame = nil
+    local headerInputConn = nil
+
     local function CloseHeaderDropdown()
         if not IsHeaderDropOpen then return end
         IsHeaderDropOpen = false
         Tween(WArrow, {Rotation = 0}, 0.15)
         Tween(WStroke, {Color = Theme.ItemBorder}, 0.15)
-        Window:CloseActiveFloating()
+        if headerInputConn then
+            headerInputConn:Disconnect()
+            headerInputConn = nil
+        end
+        if HeaderDropFrame and HeaderDropFrame.Parent then
+            HeaderDropFrame:Destroy()
+            HeaderDropFrame = nil
+        end
+        if Window.ActiveDropdownCloser == CloseHeaderDropdown then
+            Window.ActiveDropdownCloser = nil
+        end
     end
 
     local function OpenHeaderDropdown(options, currentVal, callback)
         CloseActiveFloating()
         IsHeaderDropOpen = true
+        Window.ActiveDropdownCloser = CloseHeaderDropdown
         Tween(WArrow, {Rotation = 180}, 0.15)
         Tween(WStroke, {Color = Theme.Accent}, 0.15)
 
-        local pos = WeaponDropdownButton.AbsolutePosition - MainFrame.AbsolutePosition
-        local size = WeaponDropdownButton.AbsoluteSize
+        local dropWidth = math.max(WeaponDropdownButton.AbsoluteSize.X, 120)
+        local dropHeight = math.min(#options * 24 + 6, 160)
+        local posX = WeaponDropdownButton.AbsolutePosition.X
+        local posY = WeaponDropdownButton.AbsolutePosition.Y + WeaponDropdownButton.AbsoluteSize.Y + 4
 
-        local DropFrame = Instance.new("Frame")
-        DropFrame.Name = "WeaponDropFloating"
-        DropFrame.Size = UDim2.new(0, size.X, 0, math.min(#options * 24 + 6, 160))
-        DropFrame.Position = UDim2.new(0, pos.X, 0, pos.Y + size.Y + 4)
-        DropFrame.BackgroundColor3 = Theme.CardBackground
-        DropFrame.BorderSizePixel = 0
-        DropFrame.ZIndex = 850
-        DropFrame.Parent = OverlayLayer
+        HeaderDropFrame = Instance.new("Frame")
+        HeaderDropFrame.Name = "WeaponDropFloating"
+        HeaderDropFrame.Size = UDim2.new(0, dropWidth, 0, dropHeight)
+        HeaderDropFrame.Position = UDim2.new(0, posX, 0, posY)
+        HeaderDropFrame.BackgroundColor3 = Theme.CardBackground
+        HeaderDropFrame.BorderSizePixel = 0
+        HeaderDropFrame.ZIndex = 9999
+        HeaderDropFrame.Parent = ScreenGui
 
         local DCorner = Instance.new("UICorner")
         DCorner.CornerRadius = UDim.new(0, 4)
-        DCorner.Parent = DropFrame
+        DCorner.Parent = HeaderDropFrame
 
         local DStroke = Instance.new("UIStroke")
         DStroke.Color = Theme.ItemBorder
         DStroke.Thickness = 1
-        DStroke.Parent = DropFrame
+        DStroke.Parent = HeaderDropFrame
 
         local DScroll = Instance.new("ScrollingFrame")
         DScroll.Size = UDim2.new(1, -2, 1, -4)
@@ -1508,8 +1562,8 @@ function MemeSense:CreateWindow(windowConfig)
         DScroll.ScrollBarImageColor3 = Theme.ItemBorderHover
         DScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
         DScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-        DScroll.ZIndex = 851
-        DScroll.Parent = DropFrame
+        DScroll.ZIndex = 10000
+        DScroll.Parent = HeaderDropFrame
 
         local DLayout = Instance.new("UIListLayout")
         DLayout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -1517,32 +1571,44 @@ function MemeSense:CreateWindow(windowConfig)
         DLayout.Parent = DScroll
 
         for _, opt in ipairs(options) do
+            local isSel = (opt == currentVal)
             local OptBtn = Instance.new("TextButton")
+            OptBtn.Name = "Opt_" .. tostring(opt)
             OptBtn.Size = UDim2.new(1, 0, 0, 22)
-            OptBtn.BackgroundTransparency = 1
+            OptBtn.BackgroundColor3 = isSel and Theme.ItemFill or Theme.CardBackground
+            OptBtn.BackgroundTransparency = isSel and 0 or 1
+            OptBtn.BorderSizePixel = 0
             OptBtn.Text = ""
             OptBtn.AutoButtonColor = false
-            OptBtn.ZIndex = 852
+            OptBtn.ZIndex = 10001
             OptBtn.Parent = DScroll
 
             local OptLbl = Instance.new("TextLabel")
+            OptLbl.Name = "Label"
             OptLbl.Size = UDim2.new(1, -12, 1, 0)
             OptLbl.Position = UDim2.new(0, 8, 0, 0)
             OptLbl.BackgroundTransparency = 1
             OptLbl.Text = tostring(opt)
             OptLbl.Font = Enum.Font.GothamMedium
             OptLbl.TextSize = 11
-            OptLbl.TextColor3 = (opt == currentVal) and Theme.Accent or Theme.TextSecondary
+            OptLbl.TextColor3 = isSel and Theme.Accent or Theme.TextSecondary
             OptLbl.TextXAlignment = Enum.TextXAlignment.Left
-            OptLbl.ZIndex = 853
+            OptLbl.ZIndex = 10002
             OptLbl.Parent = OptBtn
 
             OptBtn.MouseEnter:Connect(function()
+                OptBtn.BackgroundTransparency = 0
+                OptBtn.BackgroundColor3 = Theme.ItemFill
                 Tween(OptLbl, {TextColor3 = Theme.TextPrimary}, 0.1)
             end)
             OptBtn.MouseLeave:Connect(function()
-                if opt ~= currentVal then
+                local still = (opt == currentVal)
+                OptBtn.BackgroundTransparency = still and 0 or 1
+                OptBtn.BackgroundColor3 = Theme.ItemFill
+                if not still then
                     Tween(OptLbl, {TextColor3 = Theme.TextSecondary}, 0.1)
+                else
+                    Tween(OptLbl, {TextColor3 = Theme.Accent}, 0.1)
                 end
             end)
             OptBtn.MouseButton1Click:Connect(function()
@@ -1553,10 +1619,28 @@ function MemeSense:CreateWindow(windowConfig)
             end)
         end
 
-        SetActiveFloating(DropFrame, WeaponDropdownButton, function()
-            IsHeaderDropOpen = false
-            Tween(WArrow, {Rotation = 0}, 0.15)
-            Tween(WStroke, {Color = Theme.ItemBorder}, 0.15)
+        task.defer(function()
+            if not IsHeaderDropOpen then return end
+            headerInputConn = UserInputService.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 or input.UserInputType == Enum.UserInputType.Touch then
+                    if not IsHeaderDropOpen or not HeaderDropFrame or not HeaderDropFrame.Parent then
+                        if headerInputConn then headerInputConn:Disconnect(); headerInputConn = nil end
+                        return
+                    end
+                    local mPos = input.Position
+                    local fPos = HeaderDropFrame.AbsolutePosition
+                    local fSize = HeaderDropFrame.AbsoluteSize
+                    local bPos = WeaponDropdownButton.AbsolutePosition
+                    local bSize = WeaponDropdownButton.AbsoluteSize
+
+                    local inFloating = (mPos.X >= fPos.X and mPos.X <= fPos.X + fSize.X and mPos.Y >= fPos.Y and mPos.Y <= fPos.Y + fSize.Y)
+                    local inButton = (mPos.X >= bPos.X and mPos.X <= bPos.X + bSize.X and mPos.Y >= bPos.Y and mPos.Y <= bPos.Y + bSize.Y)
+
+                    if not inFloating and not inButton then
+                        CloseHeaderDropdown()
+                    end
+                end
+            end)
         end)
     end
 
@@ -1919,15 +2003,22 @@ function MemeSense:CreateWindow(windowConfig)
         CloseActiveFloating()
         local h, s, v = initialColor:ToHSV()
 
-        local pos = sourceBtn and (sourceBtn.AbsolutePosition - MainFrame.AbsolutePosition) or Vector2.new(200, 150)
+        local posX = sourceBtn and (sourceBtn.AbsolutePosition.X - 140) or 200
+        local posY = sourceBtn and (sourceBtn.AbsolutePosition.Y + 20) or 150
+
+        local targetGui = ScreenGui or OverlayLayer
+        local scrSize = (targetGui and targetGui.AbsoluteSize) or (Workspace.CurrentCamera and Workspace.CurrentCamera.ViewportSize) or Vector2.new(1920, 1080)
+        posX = math.clamp(posX, 10, scrSize.X - 170)
+        posY = math.clamp(posY, 10, scrSize.Y - 170)
+
         local CPFrame = Instance.new("Frame")
         CPFrame.Name = "ColorPickerPopup"
         CPFrame.Size = UDim2.new(0, 160, 0, 160)
-        CPFrame.Position = UDim2.new(0, math.clamp(pos.X - 140, 20, MainFrame.AbsoluteSize.X - 180), 0, math.clamp(pos.Y + 20, 20, MainFrame.AbsoluteSize.Y - 180))
+        CPFrame.Position = UDim2.new(0, posX, 0, posY)
         CPFrame.BackgroundColor3 = Theme.CardBackground
         CPFrame.BorderSizePixel = 0
-        CPFrame.ZIndex = 850
-        CPFrame.Parent = OverlayLayer
+        CPFrame.ZIndex = 9999
+        CPFrame.Parent = targetGui
 
         local CPCorner = Instance.new("UICorner")
         CPCorner.CornerRadius = UDim.new(0, 4)
@@ -1947,7 +2038,7 @@ function MemeSense:CreateWindow(windowConfig)
         TitleBar.TextSize = 11
         TitleBar.TextColor3 = Theme.TextSecondary
         TitleBar.TextXAlignment = Enum.TextXAlignment.Left
-        TitleBar.ZIndex = 851
+        TitleBar.ZIndex = 10000
         TitleBar.Parent = CPFrame
 
         local SVBox = Instance.new("ImageButton")
@@ -1957,7 +2048,7 @@ function MemeSense:CreateWindow(windowConfig)
         SVBox.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
         SVBox.BorderSizePixel = 0
         SVBox.AutoButtonColor = false
-        SVBox.ZIndex = 851
+        SVBox.ZIndex = 10000
         SVBox.Parent = CPFrame
 
         local SVCorner = Instance.new("UICorner")
@@ -1968,7 +2059,7 @@ function MemeSense:CreateWindow(windowConfig)
         WhiteGrad.Size = UDim2.new(1, 0, 1, 0)
         WhiteGrad.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
         WhiteGrad.BorderSizePixel = 0
-        WhiteGrad.ZIndex = 852
+        WhiteGrad.ZIndex = 10001
         WhiteGrad.Parent = SVBox
 
         local WhiteGradUIG = Instance.new("UIGradient")
@@ -1982,7 +2073,7 @@ function MemeSense:CreateWindow(windowConfig)
         BlackGrad.Size = UDim2.new(1, 0, 1, 0)
         BlackGrad.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
         BlackGrad.BorderSizePixel = 0
-        BlackGrad.ZIndex = 853
+        BlackGrad.ZIndex = 10002
         BlackGrad.Parent = SVBox
 
         local BlackGradUIG = Instance.new("UIGradient")
@@ -1998,7 +2089,7 @@ function MemeSense:CreateWindow(windowConfig)
         SVCursor.Position = UDim2.new(s, -3, 1 - v, -3)
         SVCursor.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
         SVCursor.BorderSizePixel = 0
-        SVCursor.ZIndex = 855
+        SVCursor.ZIndex = 10004
         SVCursor.Parent = SVBox
 
         local SVCCorner = Instance.new("UICorner")
@@ -2012,7 +2103,7 @@ function MemeSense:CreateWindow(windowConfig)
         HueBar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
         HueBar.BorderSizePixel = 0
         HueBar.AutoButtonColor = false
-        HueBar.ZIndex = 851
+        HueBar.ZIndex = 10000
         HueBar.Parent = CPFrame
 
         local HueCorner = Instance.new("UICorner")
@@ -2037,7 +2128,7 @@ function MemeSense:CreateWindow(windowConfig)
         HueCursor.Position = UDim2.new(0, -1, h, -1)
         HueCursor.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
         HueCursor.BorderSizePixel = 0
-        HueCursor.ZIndex = 855
+        HueCursor.ZIndex = 10004
         HueCursor.Parent = HueBar
 
         local PreviewBox = Instance.new("Frame")
@@ -2045,7 +2136,7 @@ function MemeSense:CreateWindow(windowConfig)
         PreviewBox.Position = UDim2.new(0, 8, 1, -24)
         PreviewBox.BackgroundColor3 = initialColor
         PreviewBox.BorderSizePixel = 0
-        PreviewBox.ZIndex = 851
+        PreviewBox.ZIndex = 10000
         PreviewBox.Parent = CPFrame
 
         local PCorner = Instance.new("UICorner")
@@ -2061,7 +2152,7 @@ function MemeSense:CreateWindow(windowConfig)
         HexLabel.TextColor3 = Theme.TextPrimary
         HexLabel.TextXAlignment = Enum.TextXAlignment.Left
         HexLabel.Text = "#" .. ColorToHex(initialColor)
-        HexLabel.ZIndex = 851
+        HexLabel.ZIndex = 10000
         HexLabel.Parent = CPFrame
 
         local function UpdateColor()
@@ -2096,7 +2187,7 @@ function MemeSense:CreateWindow(windowConfig)
             end
         end)
 
-        UserInputService.InputChanged:Connect(function(input)
+        local inputConn1 = UserInputService.InputChanged:Connect(function(input)
             if HueDrag and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
                 local relY = math.clamp((input.Position.Y - HueBar.AbsolutePosition.Y) / HueBar.AbsoluteSize.Y, 0, 1)
                 h = relY
@@ -2112,14 +2203,54 @@ function MemeSense:CreateWindow(windowConfig)
             end
         end)
 
-        UserInputService.InputEnded:Connect(function(input)
+        local inputConn2 = UserInputService.InputEnded:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                 HueDrag = false
                 SVDrag = false
             end
         end)
 
-        SetActiveFloating(CPFrame, sourceBtn)
+        local cpClickConn = nil
+        local function CloseColorPicker()
+            if inputConn1 then inputConn1:Disconnect(); inputConn1 = nil end
+            if inputConn2 then inputConn2:Disconnect(); inputConn2 = nil end
+            if cpClickConn then cpClickConn:Disconnect(); cpClickConn = nil end
+            if CPFrame and CPFrame.Parent then
+                CPFrame:Destroy()
+            end
+            if Window.ActiveDropdownCloser == CloseColorPicker then
+                Window.ActiveDropdownCloser = nil
+            end
+        end
+
+        Window.ActiveDropdownCloser = CloseColorPicker
+        Window.CurrentActiveFloating = CPFrame
+
+        task.defer(function()
+            if not CPFrame or not CPFrame.Parent then return end
+            cpClickConn = UserInputService.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 or input.UserInputType == Enum.UserInputType.Touch then
+                    if not CPFrame or not CPFrame.Parent then
+                        if cpClickConn then cpClickConn:Disconnect(); cpClickConn = nil end
+                        return
+                    end
+                    local mPos = input.Position
+                    local fPos = CPFrame.AbsolutePosition
+                    local fSize = CPFrame.AbsoluteSize
+                    local inFloating = (mPos.X >= fPos.X and mPos.X <= fPos.X + fSize.X and mPos.Y >= fPos.Y and mPos.Y <= fPos.Y + fSize.Y)
+                    local inSource = false
+                    if sourceBtn and sourceBtn.Parent then
+                        local bPos = sourceBtn.AbsolutePosition
+                        local bSize = sourceBtn.AbsoluteSize
+                        inSource = (mPos.X >= bPos.X and mPos.X <= bPos.X + bSize.X and mPos.Y >= bPos.Y and mPos.Y <= bPos.Y + bSize.Y)
+                    end
+
+                    if not inFloating and not inSource then
+                        CloseColorPicker()
+                    end
+                end
+            end)
+        end)
     end
 
     function Window:CreateWatermark(watermarkConfig)
