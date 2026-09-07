@@ -7,20 +7,30 @@ local CoreGui = game:GetService("CoreGui")
 local LocalPlayer = Players.LocalPlayer
 
 local function GetSafeGuiParent(customParent)
-    if customParent then
+    if customParent and typeof(customParent) == "Instance" and customParent.Parent then
         return customParent
     end
-    local success, result = pcall(function()
+    if typeof(gethui) == "function" then
+        local success, hui = pcall(gethui)
+        if success and hui and typeof(hui) == "Instance" then
+            return hui
+        end
+    end
+    local coreOk, coreResult = pcall(function()
+        local test = Instance.new("Folder")
+        test.Name = "MemeSense_Test"
+        test.Parent = CoreGui
+        test:Destroy()
         return CoreGui
     end)
-    if success and result then
-        return result
-    end
-    if typeof(gethui) == "function" then
-        return gethui()
+    if coreOk and coreResult then
+        return coreResult
     end
     if LocalPlayer then
-        return LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui", 5)
+        local pGui = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:FindFirstChild("PlayerGui")
+        if pGui then return pGui end
+        local ok, res = pcall(function() return LocalPlayer:WaitForChild("PlayerGui", 3) end)
+        if ok and res then return res end
     end
     return game:GetService("StarterGui")
 end
@@ -1344,22 +1354,33 @@ function MemeSense:CreateWindow(windowConfig)
     ContentArea.BorderSizePixel = 0
     ContentArea.Parent = Body
 
-    local CurrentActiveFloating = nil
-    local CurrentActiveFloatingSource = nil
+    local Window = {
+        MainFrame = MainFrame,
+        ScreenGui = ScreenGui,
+        Tabs = {},
+        ActiveTab = nil,
+        Theme = Theme,
+        OverlayLayer = OverlayLayer,
+        CurrentActiveFloating = nil,
+        CurrentActiveFloatingSource = nil
+    }
 
     local function CloseActiveFloating()
-        if CurrentActiveFloating then
-            pcall(function() CurrentActiveFloating:Destroy() end)
-            CurrentActiveFloating = nil
-            CurrentActiveFloatingSource = nil
+        if Window.CurrentActiveFloating then
+            pcall(function() Window.CurrentActiveFloating:Destroy() end)
+            Window.CurrentActiveFloating = nil
+            Window.CurrentActiveFloatingSource = nil
         end
     end
 
     local function SetActiveFloating(floatingObj, sourceObj)
         CloseActiveFloating()
-        CurrentActiveFloating = floatingObj
-        CurrentActiveFloatingSource = sourceObj
+        Window.CurrentActiveFloating = floatingObj
+        Window.CurrentActiveFloatingSource = sourceObj
     end
+
+    Window.CloseActiveFloating = CloseActiveFloating
+    Window.SetActiveFloating = SetActiveFloating
 
     local function OpenHeaderDropdown(options, currentVal, callback)
         CloseActiveFloating()
@@ -1442,7 +1463,7 @@ function MemeSense:CreateWindow(windowConfig)
     end
 
     WeaponDropdownButton.MouseButton1Click:Connect(function()
-        if CurrentActiveFloating and CurrentActiveFloating.Name == "WeaponDropFloating" then
+        if Window.CurrentActiveFloating and Window.CurrentActiveFloating.Name == "WeaponDropFloating" then
             CloseActiveFloating()
         else
             OpenHeaderDropdown(WeaponSelectorConfig.Options, WLabel.Text, WeaponSelectorConfig.Callback)
@@ -1451,11 +1472,11 @@ function MemeSense:CreateWindow(windowConfig)
 
     UserInputService.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            if CurrentActiveFloating then
+            if Window.CurrentActiveFloating then
                 task.defer(function()
-                    if not CurrentActiveFloating or not CurrentActiveFloating.Parent then
-                        CurrentActiveFloating = nil
-                        CurrentActiveFloatingSource = nil
+                    if not Window.CurrentActiveFloating or not Window.CurrentActiveFloating.Parent then
+                        Window.CurrentActiveFloating = nil
+                        Window.CurrentActiveFloatingSource = nil
                         return
                     end
 
@@ -1464,8 +1485,8 @@ function MemeSense:CreateWindow(windowConfig)
 
                     local fPos, fSize
                     local sOk = pcall(function()
-                        fPos = CurrentActiveFloating.AbsolutePosition
-                        fSize = CurrentActiveFloating.AbsoluteSize
+                        fPos = Window.CurrentActiveFloating.AbsolutePosition
+                        fSize = Window.CurrentActiveFloating.AbsoluteSize
                     end)
 
                     if not sOk or not fPos or not fSize then
@@ -1476,11 +1497,11 @@ function MemeSense:CreateWindow(windowConfig)
                     local insideFloating = mousePos.X >= fPos.X and mousePos.X <= fPos.X + fSize.X and mousePos.Y >= fPos.Y and mousePos.Y <= fPos.Y + fSize.Y
 
                     local insideSource = false
-                    if CurrentActiveFloatingSource and CurrentActiveFloatingSource.Parent then
+                    if Window.CurrentActiveFloatingSource and Window.CurrentActiveFloatingSource.Parent then
                         local sPos, sSize
                         local srcOk = pcall(function()
-                            sPos = CurrentActiveFloatingSource.AbsolutePosition
-                            sSize = CurrentActiveFloatingSource.AbsoluteSize
+                            sPos = Window.CurrentActiveFloatingSource.AbsolutePosition
+                            sSize = Window.CurrentActiveFloatingSource.AbsoluteSize
                         end)
                         if srcOk and sPos and sSize then
                             insideSource = mousePos.X >= sPos.X and mousePos.X <= sPos.X + sSize.X and mousePos.Y >= sPos.Y and mousePos.Y <= sPos.Y + sSize.Y
@@ -1535,6 +1556,11 @@ function MemeSense:CreateWindow(windowConfig)
     local WindowOpen = true
     local function SetWindowVisible(visible)
         WindowOpen = visible
+        if not ScreenGui.Parent or not ScreenGui:IsDescendantOf(game) then
+            pcall(function()
+                ScreenGui.Parent = GetSafeGuiParent(windowConfig.Parent)
+            end)
+        end
         MainFrame.Visible = WindowOpen
         if not WindowOpen then
             CloseActiveFloating()
@@ -1547,29 +1573,16 @@ function MemeSense:CreateWindow(windowConfig)
 
     UserInputService.InputBegan:Connect(function(input, processed)
         if input.KeyCode ~= Enum.KeyCode.Unknown and input.KeyCode == ToggleKey then
-            if not UserInputService:GetFocusedTextBox() then
-                ToggleWindow()
-            end
+            ToggleWindow()
         end
     end)
 
-    local Window = {
-        MainFrame = MainFrame,
-        ScreenGui = ScreenGui,
-        Tabs = {},
-        ActiveTab = nil,
-        Theme = Theme,
-        OverlayLayer = OverlayLayer,
-        CloseActiveFloating = CloseActiveFloating,
-        SetActiveFloating = SetActiveFloating,
-        CurrentActiveFloating = CurrentActiveFloating,
-        SetVisible = SetWindowVisible,
-        Toggle = ToggleWindow,
-        IsOpen = function() return WindowOpen end,
-        SetToggleKey = function(self, newKey)
-            ToggleKey = newKey
-        end
-    }
+    Window.SetVisible = SetWindowVisible
+    Window.Toggle = ToggleWindow
+    Window.IsOpen = function() return WindowOpen end
+    Window.SetToggleKey = function(self, newKey)
+        ToggleKey = newKey
+    end
 
     function Window:CreateTab(tabConfig)
         tabConfig = tabConfig or {}
