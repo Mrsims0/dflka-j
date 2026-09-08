@@ -625,7 +625,7 @@ local function CreateColumnController(columnsContainer, colTitle, columnsList, T
 
         local Label = Instance.new("TextLabel")
         Label.Name = "Label"
-        Label.Size = UDim2.new(1, -110, 1, 0)
+        Label.Size = UDim2.new(1, -96, 1, 0)
         Label.Position = UDim2.new(0, 0, 0, 0)
         Label.BackgroundTransparency = 1
         Label.Text = Name
@@ -633,12 +633,14 @@ local function CreateColumnController(columnsContainer, colTitle, columnsList, T
         Label.TextSize = 12
         Label.TextColor3 = Theme.TextPrimary
         Label.TextXAlignment = Enum.TextXAlignment.Left
+        Label.ClipsDescendants = true
+        Label.TextTruncate = Enum.TextTruncate.AtEnd
         Label.Parent = DropRow
 
         local DropButton = Instance.new("TextButton")
         DropButton.Name = "DropButton"
-        DropButton.Size = UDim2.new(0, 105, 0, 22)
-        DropButton.Position = UDim2.new(1, -105, 0.5, -11)
+        DropButton.Size = UDim2.new(0, 90, 0, 22)
+        DropButton.Position = UDim2.new(1, -90, 0.5, -11)
         DropButton.BackgroundColor3 = Theme.ItemFill
         DropButton.BorderSizePixel = 0
         DropButton.Text = ""
@@ -1103,7 +1105,7 @@ function MemeSense:CreateWindow(windowConfig)
     windowConfig = windowConfig or {}
     local Title = windowConfig.Title or "Meme"
     local SubTitle = windowConfig.SubTitle or "Sense"
-    local Size = windowConfig.Size or UDim2.fromOffset(730, 490)
+    local Size = windowConfig.Size or UDim2.fromOffset(800, 600)
     local ToggleKey = windowConfig.ToggleKey or Enum.KeyCode.RightShift
     local Theme = MemeSense.Themes.Default
 
