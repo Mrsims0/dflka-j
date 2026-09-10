@@ -2594,4 +2594,9 @@ function MemeSense:CreateWindow(windowConfig)
     return Window
 end
 
+if typeof(getgenv) == "function" then
+    getgenv().MemeSense = MemeSense
+end
+_G.MemeSense = MemeSense
+
 return MemeSense
