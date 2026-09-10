@@ -1135,6 +1135,11 @@ function MemeSense:CreateWindow(windowConfig)
     MainStroke.Thickness = 1
     MainStroke.Parent = MainFrame
 
+    local MainScale = Instance.new("UIScale")
+    MainScale.Name = "MainScale"
+    MainScale.Scale = 1.0
+    MainScale.Parent = MainFrame
+
     local TopGradientBar = Instance.new("Frame")
     TopGradientBar.Name = "TopGradientBar"
     TopGradientBar.Size = UDim2.new(1, 0, 0, 2)
@@ -1702,6 +1707,85 @@ function MemeSense:CreateWindow(windowConfig)
         end
     end)
 
+    -- Bottom-Right Drag-to-Resize Handle
+    local ResizeGrip = Instance.new("TextButton")
+    ResizeGrip.Name = "ResizeGrip"
+    ResizeGrip.Size = UDim2.new(0, 18, 0, 18)
+    ResizeGrip.Position = UDim2.new(1, -18, 1, -18)
+    ResizeGrip.BackgroundTransparency = 1
+    ResizeGrip.Text = ""
+    ResizeGrip.AutoButtonColor = false
+    ResizeGrip.ZIndex = 950
+    ResizeGrip.Parent = MainFrame
+
+    local gripLines = {}
+    for i = 1, 3 do
+        local line = Instance.new("Frame")
+        line.Name = "GripLine" .. i
+        line.Size = UDim2.new(0, i * 4, 0, 1)
+        line.Position = UDim2.new(1, -(i * 4) - 2, 1, -2 - ((4 - i) * 4))
+        line.BackgroundColor3 = Color3.fromRGB(120, 125, 140)
+        line.BorderSizePixel = 0
+        line.ZIndex = 951
+        line.Parent = ResizeGrip
+        table.insert(gripLines, line)
+    end
+
+    local Resizing = false
+    local ResizeStart = nil
+    local StartSize = nil
+
+    ResizeGrip.MouseEnter:Connect(function()
+        for _, l in ipairs(gripLines) do
+            l.BackgroundColor3 = Theme.Accent or Color3.fromRGB(80, 205, 255)
+        end
+    end)
+    ResizeGrip.MouseLeave:Connect(function()
+        if not Resizing then
+            for _, l in ipairs(gripLines) do
+                l.BackgroundColor3 = Color3.fromRGB(120, 125, 140)
+            end
+        end
+    end)
+
+    ResizeGrip.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            Resizing = true
+            ResizeStart = input.Position
+            StartSize = Vector2.new(MainFrame.AbsoluteSize.X, MainFrame.AbsoluteSize.Y)
+
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    Resizing = false
+                    for _, l in ipairs(gripLines) do
+                        l.BackgroundColor3 = Color3.fromRGB(120, 125, 140)
+                    end
+                end
+            end)
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            if Resizing then
+                Resizing = false
+                for _, l in ipairs(gripLines) do
+                    l.BackgroundColor3 = Color3.fromRGB(120, 125, 140)
+                end
+            end
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if Resizing and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local currentScale = (MainScale and MainScale.Scale > 0) and MainScale.Scale or 1
+            local delta = (input.Position - ResizeStart) / currentScale
+            local newWidth = math.clamp(StartSize.X + delta.X, 550, 1600)
+            local newHeight = math.clamp(StartSize.Y + delta.Y, 380, 1100)
+            MainFrame.Size = UDim2.fromOffset(newWidth, newHeight)
+        end
+    end)
+
     local WindowOpen = true
     local function SetWindowVisible(visible)
         WindowOpen = visible
@@ -1749,6 +1833,15 @@ function MemeSense:CreateWindow(windowConfig)
     Window.SetVisible = SetWindowVisible
     Window.Toggle = ToggleWindow
     Window.IsOpen = function() return WindowOpen end
+    Window.MainFrame = MainFrame
+    Window.MainScale = MainScale
+    Window.SetScale = function(self, scale)
+        if typeof(self) == "number" then scale = self end
+        if MainScale then
+            MainScale.Scale = math.clamp(scale, 0.5, 2.5)
+        end
+    end
+    Window.ScreenGui = ScreenGui
     Window.SetToggleKey = function(self, newKey)
         if typeof(self) == "EnumItem" then
             newKey = self
