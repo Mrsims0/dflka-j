@@ -265,8 +265,8 @@ local function CreateColumnController(columnsContainer, colTitle, columnsList, T
         GadgetLayout.Padding = UDim.new(0, 4)
         GadgetLayout.Parent = GadgetContainer
 
-        local function SetState(val)
-            State = val
+        local function SetState(val, ignoreCallback)
+            State = (val == true)
             if State then
                 Tween(Box, {BackgroundColor3 = Theme.Accent}, 0.12)
                 Tween(BoxStroke, {Color = Theme.Accent}, 0.12)
@@ -278,7 +278,9 @@ local function CreateColumnController(columnsContainer, colTitle, columnsList, T
                 CheckImg.ImageTransparency = 1
                 Tween(Label, {TextColor3 = Theme.TextMuted}, 0.12)
             end
-            Callback(State)
+            if not ignoreCallback then
+                Callback(State)
+            end
         end
 
         ClickArea.MouseEnter:Connect(function()
@@ -300,7 +302,8 @@ local function CreateColumnController(columnsContainer, colTitle, columnsList, T
         local ToggleObject = {
             Row = ToggleRow,
             Set = SetState,
-            Get = function() return State end
+            Get = function() return State end,
+            ColorPickers = {}
         }
 
         function ToggleObject:AddKeybind(keybindConfig)
@@ -373,6 +376,16 @@ local function CreateColumnController(columnsContainer, colTitle, columnsList, T
             end
             UpdateBindDisplay()
 
+            local function SetBindKey(k, ignoreCallback)
+                BindKey = k
+                UpdateBindDisplay()
+                if not ignoreCallback then
+                    BindCallback(BindKey)
+                end
+            end
+            ToggleObject.SetKeybind = SetBindKey
+            ToggleObject.GetKeybind = function() return BindKey end
+
             BindButton.MouseButton1Click:Connect(function()
                 if Listening then return end
                 Listening = true
@@ -432,6 +445,32 @@ local function CreateColumnController(columnsContainer, colTitle, columnsList, T
             CStroke.Color = Theme.ItemBorder
             CStroke.Thickness = 1
             CStroke.Parent = ColorBox
+
+            local function SetCPColor(c, ignoreCallback)
+                ColorVal = c
+                ColorBox.BackgroundColor3 = c
+                if not ignoreCallback then
+                    CPCallback(c)
+                end
+            end
+
+            table.insert(ToggleObject.ColorPickers, {
+                Button = ColorBox,
+                Set = SetCPColor,
+                Get = function() return ColorVal end
+            })
+
+            ToggleObject.SetColor = function(self, c, idx, ignoreCallback)
+                if typeof(self) == "Color3" then
+                    ignoreCallback = idx
+                    idx = 1
+                    c = self
+                end
+                idx = idx or 1
+                if ToggleObject.ColorPickers[idx] then
+                    ToggleObject.ColorPickers[idx].Set(c, ignoreCallback)
+                end
+            end
 
             ColorBox.MouseButton1Click:Connect(function()
                 Window:OpenColorPicker(ColorVal, function(newCol)
@@ -1833,6 +1872,8 @@ function MemeSense:CreateWindow(windowConfig)
     Window.SetVisible = SetWindowVisible
     Window.Toggle = ToggleWindow
     Window.IsOpen = function() return WindowOpen end
+    Window.SetMasterSwitch = UpdateMasterSwitch
+    Window.GetMasterSwitch = function() return MasterState end
     Window.MainFrame = MainFrame
     Window.MainScale = MainScale
     Window.SetScale = function(self, scale)
