@@ -1,3 +1,58 @@
+local origLoadstring = loadstring
+local function SafeLoadstring(source, chunkName)
+    if typeof(source) == "Instance" then
+        if source:IsA("StringValue") then
+            source = source.Value
+        elseif source:IsA("ModuleScript") then
+            return function() return require(source) end
+        end
+        if typeof(source) == "Instance" then
+            local s, src = pcall(function() return source.Source end)
+            if s and type(src) == "string" and #src > 0 then
+                source = src
+            end
+        end
+        if typeof(source) == "Instance" then
+            local s, val = pcall(function() return source.Value end)
+            if s and type(val) == "string" then
+                source = val
+            end
+        end
+        if typeof(source) == "Instance" then
+            local sv = source:FindFirstChildOfClass("StringValue")
+            if sv and type(sv.Value) == "string" then
+                source = sv.Value
+            end
+        end
+        if typeof(source) == "Instance" then
+            local ms = source:FindFirstChildOfClass("ModuleScript")
+            if ms then
+                return function() return require(ms) end
+            end
+        end
+        if typeof(source) == "Instance" and typeof(decompile) == "function" then
+            local s, dec = pcall(decompile, source)
+            if s and type(dec) == "string" and #dec > 0 then
+                source = dec
+            end
+        end
+    end
+    if typeof(source) ~= "string" then
+        source = tostring(source or "")
+    end
+    if typeof(origLoadstring) == "function" then
+        return origLoadstring(source, chunkName)
+    end
+    return function() end
+end
+
+if typeof(getgenv) == "function" then
+    pcall(function() getgenv().loadstring = SafeLoadstring end)
+end
+if typeof(_G) == "table" then
+    pcall(function() _G.loadstring = SafeLoadstring end)
+end
+
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
@@ -220,7 +275,7 @@ local function CreateColumnController(columnsContainer, colTitle, columnsList, T
         Box.Parent = ClickArea
 
         local BoxCorner = Instance.new("UICorner")
-        BoxCorner.CornerRadius = UDim.new(0, 2)
+        BoxCorner.CornerRadius = UDim.new(0, 0)
         BoxCorner.Parent = Box
 
         local BoxStroke = Instance.new("UIStroke")
@@ -265,7 +320,15 @@ local function CreateColumnController(columnsContainer, colTitle, columnsList, T
         GadgetLayout.Padding = UDim.new(0, 4)
         GadgetLayout.Parent = GadgetContainer
 
-        local function SetState(val, ignoreCallback)
+        local function SetState(selfOrVal, valOrIgnore, maybeIgnore)
+            local val, ignoreCallback
+            if type(selfOrVal) == "table" and (type(valOrIgnore) == "boolean" or valOrIgnore == nil) then
+                val = valOrIgnore
+                ignoreCallback = maybeIgnore
+            else
+                val = selfOrVal
+                ignoreCallback = valOrIgnore
+            end
             State = (val == true)
             if State then
                 Tween(Box, {BackgroundColor3 = Theme.Accent}, 0.12)
@@ -323,7 +386,7 @@ local function CreateColumnController(columnsContainer, colTitle, columnsList, T
             BindButton.Parent = GadgetContainer
 
             local BCorner = Instance.new("UICorner")
-            BCorner.CornerRadius = UDim.new(0, 3)
+            BCorner.CornerRadius = UDim.new(0, 0)
             BCorner.Parent = BindButton
 
             local BStroke = Instance.new("UIStroke")
@@ -376,7 +439,15 @@ local function CreateColumnController(columnsContainer, colTitle, columnsList, T
             end
             UpdateBindDisplay()
 
-            local function SetBindKey(k, ignoreCallback)
+            local function SetBindKey(selfOrKey, keyOrIgnore, maybeIgnore)
+                local k, ignoreCallback
+                if type(selfOrKey) == "table" and (typeof(keyOrIgnore) == "EnumItem" or keyOrIgnore == nil) then
+                    k = keyOrIgnore
+                    ignoreCallback = maybeIgnore
+                else
+                    k = selfOrKey
+                    ignoreCallback = keyOrIgnore
+                end
                 BindKey = k
                 UpdateBindDisplay()
                 if not ignoreCallback then
@@ -438,7 +509,7 @@ local function CreateColumnController(columnsContainer, colTitle, columnsList, T
             ColorBox.Parent = GadgetContainer
 
             local CCorner = Instance.new("UICorner")
-            CCorner.CornerRadius = UDim.new(0, 2)
+            CCorner.CornerRadius = UDim.new(0, 0)
             CCorner.Parent = ColorBox
 
             local CStroke = Instance.new("UIStroke")
@@ -545,7 +616,7 @@ local function CreateColumnController(columnsContainer, colTitle, columnsList, T
         TrackButton.Parent = SliderContainer
 
         local TrackCorner = Instance.new("UICorner")
-        TrackCorner.CornerRadius = UDim.new(0, 2)
+        TrackCorner.CornerRadius = UDim.new(0, 0)
         TrackCorner.Parent = TrackButton
 
         local Fill = Instance.new("Frame")
@@ -556,7 +627,7 @@ local function CreateColumnController(columnsContainer, colTitle, columnsList, T
         Fill.Parent = TrackButton
 
         local FillCorner = Instance.new("UICorner")
-        FillCorner.CornerRadius = UDim.new(0, 2)
+        FillCorner.CornerRadius = UDim.new(0, 0)
         FillCorner.Parent = Fill
 
         local Thumb = Instance.new("Frame")
@@ -568,7 +639,7 @@ local function CreateColumnController(columnsContainer, colTitle, columnsList, T
         Thumb.Parent = Fill
 
         local ThumbCorner = Instance.new("UICorner")
-        ThumbCorner.CornerRadius = UDim.new(0, 3)
+        ThumbCorner.CornerRadius = UDim.new(0, 0)
         ThumbCorner.Parent = Thumb
 
         local function FormatVal(val)
@@ -579,7 +650,16 @@ local function CreateColumnController(columnsContainer, colTitle, columnsList, T
             end
         end
 
-        local function SetValue(val, ignoreCallback)
+        local function SetValue(selfOrVal, valOrIgnore, maybeIgnore)
+            local val, ignoreCallback
+            if type(selfOrVal) == "table" and type(valOrIgnore) == "number" then
+                val = valOrIgnore
+                ignoreCallback = maybeIgnore
+            else
+                val = selfOrVal
+                ignoreCallback = valOrIgnore
+            end
+            if type(val) ~= "number" then return end
             local clamped = math.clamp(val, Min, Max)
             if Decimals > 0 then
                 local factor = 10 ^ Decimals
@@ -687,7 +767,7 @@ local function CreateColumnController(columnsContainer, colTitle, columnsList, T
         DropButton.Parent = DropRow
 
         local DCorner = Instance.new("UICorner")
-        DCorner.CornerRadius = UDim.new(0, 3)
+        DCorner.CornerRadius = UDim.new(0, 0)
         DCorner.Parent = DropButton
 
         local DStroke = Instance.new("UIStroke")
@@ -794,7 +874,7 @@ local function CreateColumnController(columnsContainer, colTitle, columnsList, T
             FloatingFrame.Parent = targetGui
 
             local FCorner = Instance.new("UICorner")
-            FCorner.CornerRadius = UDim.new(0, 3)
+            FCorner.CornerRadius = UDim.new(0, 0)
             FCorner.Parent = FloatingFrame
 
             local FStroke = Instance.new("UIStroke")
@@ -914,7 +994,8 @@ local function CreateColumnController(columnsContainer, colTitle, columnsList, T
 
         local DropObject = {
             Row = DropRow,
-            Set = function(val)
+            Set = function(selfOrVal, maybeVal)
+                local val = (type(selfOrVal) == "table" and maybeVal ~= nil) and maybeVal or selfOrVal
                 Selected = val
                 UpdateDisplay()
                 Callback(Selected)
@@ -1029,7 +1110,7 @@ local function CreateColumnController(columnsContainer, colTitle, columnsList, T
         BtnFrame.Parent = ElementScroll
 
         local BCorner = Instance.new("UICorner")
-        BCorner.CornerRadius = UDim.new(0, 3)
+        BCorner.CornerRadius = UDim.new(0, 0)
         BCorner.Parent = BtnFrame
 
         local BStroke = Instance.new("UIStroke")
@@ -1100,7 +1181,7 @@ local function CreateColumnController(columnsContainer, colTitle, columnsList, T
         BoxFrame.Parent = InputRow
 
         local ICorner = Instance.new("UICorner")
-        ICorner.CornerRadius = UDim.new(0, 3)
+        ICorner.CornerRadius = UDim.new(0, 0)
         ICorner.Parent = BoxFrame
 
         local IStroke = Instance.new("UIStroke")
@@ -1166,7 +1247,7 @@ function MemeSense:CreateWindow(windowConfig)
     MainFrame.Parent = ScreenGui
 
     local MainCorner = Instance.new("UICorner")
-    MainCorner.CornerRadius = UDim.new(0, 5)
+    MainCorner.CornerRadius = UDim.new(0, 0)
     MainCorner.Parent = MainFrame
 
     local MainStroke = Instance.new("UIStroke")
@@ -1193,7 +1274,7 @@ function MemeSense:CreateWindow(windowConfig)
     TopBarGradient.Parent = TopGradientBar
 
     local TopBarCorner = Instance.new("UICorner")
-    TopBarCorner.CornerRadius = UDim.new(0, 5)
+    TopBarCorner.CornerRadius = UDim.new(0, 0)
     TopBarCorner.Parent = TopGradientBar
 
     local Header = Instance.new("Frame")
@@ -1268,7 +1349,7 @@ function MemeSense:CreateWindow(windowConfig)
     MasterBox.Parent = MasterSwitchFrame
 
     local MasterBoxCorner = Instance.new("UICorner")
-    MasterBoxCorner.CornerRadius = UDim.new(0, 3)
+    MasterBoxCorner.CornerRadius = UDim.new(0, 0)
     MasterBoxCorner.Parent = MasterBox
 
     local MasterCheck = Instance.new("ImageLabel")
@@ -1293,8 +1374,9 @@ function MemeSense:CreateWindow(windowConfig)
     MasterLabel.Parent = MasterSwitchFrame
 
     local MasterState = windowConfig.MasterSwitch ~= nil and windowConfig.MasterSwitch or true
-    local function UpdateMasterSwitch(state)
-        MasterState = state
+    local function UpdateMasterSwitch(selfOrState, maybeState)
+        local state = (type(selfOrState) == "table" and maybeState ~= nil) and maybeState or selfOrState
+        MasterState = (state == true)
         if MasterState then
             MasterBox.BackgroundColor3 = Theme.Accent
             MasterCheck.ImageTransparency = 0
@@ -1338,7 +1420,7 @@ function MemeSense:CreateWindow(windowConfig)
     WeaponDropdownButton.Parent = HeaderControls
 
     local WCorner = Instance.new("UICorner")
-    WCorner.CornerRadius = UDim.new(0, 3)
+    WCorner.CornerRadius = UDim.new(0, 0)
     WCorner.Parent = WeaponDropdownButton
 
     local WStroke = Instance.new("UIStroke")
@@ -1379,7 +1461,7 @@ function MemeSense:CreateWindow(windowConfig)
     SaveButton.Parent = HeaderControls
 
     local SaveCorner = Instance.new("UICorner")
-    SaveCorner.CornerRadius = UDim.new(0, 4)
+    SaveCorner.CornerRadius = UDim.new(0, 0)
     SaveCorner.Parent = SaveButton
 
     local SaveStroke = Instance.new("UIStroke")
@@ -1437,7 +1519,7 @@ function MemeSense:CreateWindow(windowConfig)
     CloseButton.Parent = HeaderControls
 
     local CloseCorner = Instance.new("UICorner")
-    CloseCorner.CornerRadius = UDim.new(0, 4)
+    CloseCorner.CornerRadius = UDim.new(0, 0)
     CloseCorner.Parent = CloseButton
 
     local CloseStroke = Instance.new("UIStroke")
@@ -1470,7 +1552,7 @@ function MemeSense:CreateWindow(windowConfig)
     Sidebar.Parent = Body
 
     local SidebarCorner = Instance.new("UICorner")
-    SidebarCorner.CornerRadius = UDim.new(0, 5)
+    SidebarCorner.CornerRadius = UDim.new(0, 0)
     SidebarCorner.Parent = Sidebar
 
     local SidebarRightLine = Instance.new("Frame")
@@ -1591,7 +1673,7 @@ function MemeSense:CreateWindow(windowConfig)
         HeaderDropFrame.Parent = ScreenGui
 
         local DCorner = Instance.new("UICorner")
-        DCorner.CornerRadius = UDim.new(0, 4)
+        DCorner.CornerRadius = UDim.new(0, 0)
         DCorner.Parent = HeaderDropFrame
 
         local DStroke = Instance.new("UIStroke")
@@ -2044,7 +2126,7 @@ function MemeSense:CreateWindow(windowConfig)
             SubTabButton.Parent = Tab.SubTabBar
 
             local SCorner = Instance.new("UICorner")
-            SCorner.CornerRadius = UDim.new(0, 4)
+            SCorner.CornerRadius = UDim.new(0, 0)
             SCorner.Parent = SubTabButton
 
             local SStroke = Instance.new("UIStroke")
@@ -2157,7 +2239,7 @@ function MemeSense:CreateWindow(windowConfig)
         CPFrame.Parent = targetGui
 
         local CPCorner = Instance.new("UICorner")
-        CPCorner.CornerRadius = UDim.new(0, 4)
+        CPCorner.CornerRadius = UDim.new(0, 0)
         CPCorner.Parent = CPFrame
 
         local CPStroke = Instance.new("UIStroke")
@@ -2188,7 +2270,7 @@ function MemeSense:CreateWindow(windowConfig)
         SVBox.Parent = CPFrame
 
         local SVCorner = Instance.new("UICorner")
-        SVCorner.CornerRadius = UDim.new(0, 2)
+        SVCorner.CornerRadius = UDim.new(0, 0)
         SVCorner.Parent = SVBox
 
         local WhiteGrad = Instance.new("Frame")
@@ -2229,7 +2311,7 @@ function MemeSense:CreateWindow(windowConfig)
         SVCursor.Parent = SVBox
 
         local SVCCorner = Instance.new("UICorner")
-        SVCCorner.CornerRadius = UDim.new(1, 0)
+        SVCCorner.CornerRadius = UDim.new(0, 0)
         SVCCorner.Parent = SVCursor
 
         local HueBar = Instance.new("ImageButton")
@@ -2243,7 +2325,7 @@ function MemeSense:CreateWindow(windowConfig)
         HueBar.Parent = CPFrame
 
         local HueCorner = Instance.new("UICorner")
-        HueCorner.CornerRadius = UDim.new(0, 2)
+        HueCorner.CornerRadius = UDim.new(0, 0)
         HueCorner.Parent = HueBar
 
         local HueGrad = Instance.new("UIGradient")
@@ -2276,7 +2358,7 @@ function MemeSense:CreateWindow(windowConfig)
         PreviewBox.Parent = CPFrame
 
         local PCorner = Instance.new("UICorner")
-        PCorner.CornerRadius = UDim.new(0, 2)
+        PCorner.CornerRadius = UDim.new(0, 0)
         PCorner.Parent = PreviewBox
 
         local HexLabel = Instance.new("TextLabel")
@@ -2403,7 +2485,7 @@ function MemeSense:CreateWindow(windowConfig)
         WatermarkFrame.Parent = ScreenGui
 
         local WCorner = Instance.new("UICorner")
-        WCorner.CornerRadius = UDim.new(0, 4)
+        WCorner.CornerRadius = UDim.new(0, 0)
         WCorner.Parent = WatermarkFrame
 
         local WStroke = Instance.new("UIStroke")
@@ -2481,7 +2563,7 @@ function MemeSense:CreateWindow(windowConfig)
         Toast.Parent = ToastContainer
 
         local TCorner = Instance.new("UICorner")
-        TCorner.CornerRadius = UDim.new(0, 4)
+        TCorner.CornerRadius = UDim.new(0, 0)
         TCorner.Parent = Toast
 
         local TStroke = Instance.new("UIStroke")
